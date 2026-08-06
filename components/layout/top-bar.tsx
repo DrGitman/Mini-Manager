@@ -2,7 +2,8 @@
 
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
-import { Bell, Search, Settings, User, LogOut, Sparkles } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Bell, Search, Settings, User, LogOut, Sparkles, FlaskConical } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import {
   DropdownMenu,
@@ -13,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { signOut } from '@/lib/session'
+import { getDemoScansUsed, DEMO_LIMIT } from '@/lib/demo'
 import type { DemoUser } from '@/lib/types'
 
 const titles: Record<string, string> = {
@@ -43,10 +45,19 @@ export function TopBar({ unreadCount, user, aiOpen, onAiToggle }: TopBarProps) {
   const router = useRouter()
   const pathname = usePathname()
   const title = getTitle(pathname)
+  const [scansUsed, setScansUsed] = useState(0)
+
+  useEffect(() => {
+    setScansUsed(getDemoScansUsed())
+    const handler = () => setScansUsed(getDemoScansUsed())
+    window.addEventListener('mm:demo-scan', handler)
+    return () => window.removeEventListener('mm:demo-scan', handler)
+  }, [])
 
   const initials = user?.avatarInitials ?? 'U'
   const name = user?.name ?? 'Guest'
   const email = user?.email ?? ''
+  const expired = scansUsed >= DEMO_LIMIT
 
   function handleSignOut() {
     signOut()
@@ -57,6 +68,16 @@ export function TopBar({ unreadCount, user, aiOpen, onAiToggle }: TopBarProps) {
     <header className="flex h-14 shrink-0 items-center gap-4 border-b border-gray-100 bg-white px-6">
       {/* Page title */}
       <h1 className="text-base font-semibold text-gray-800 shrink-0">{title}</h1>
+
+      {/* Demo badge */}
+      <div className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
+        expired
+          ? 'bg-red-50 text-red-600 border border-red-200'
+          : 'bg-amber-50 text-amber-700 border border-amber-200'
+      }`}>
+        <FlaskConical className="size-3" />
+        {expired ? 'Demo expired' : `Demo · ${scansUsed}/${DEMO_LIMIT} scans`}
+      </div>
 
       {/* Search */}
       <div className="flex flex-1 justify-center">

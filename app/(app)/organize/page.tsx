@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { FolderOpen, FolderSearch, ArrowRight, CheckSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -16,6 +16,8 @@ import { runHeuristics } from '@/lib/heuristics'
 import { DEFAULT_PREFERENCES } from '@/lib/types'
 import type { Proposal, ConfidenceBucket } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { getDemoScansUsed, incrementDemoScans, isDemoExpired, DEMO_LIMIT } from '@/lib/demo'
+import { DemoExpiredModal } from '@/components/ui/demo-expired-modal'
 
 function confidenceColor(c: number) {
   if (c >= 0.85) return 'bg-green-50 text-green-700 border-green-200'
@@ -139,7 +141,11 @@ export default function OrganizePage() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [applyState, setApplyState] = useState<'idle' | 'loading' | 'success'>('idle')
   const [applyProgress, setApplyProgress] = useState(0)
+  const [showExpired, setShowExpired] = useState(false)
+  const [scansUsed, setScansUsed] = useState(0)
   const { toast, ToastContainer } = useToast()
+
+  useEffect(() => { setScansUsed(getDemoScansUsed()) }, [])
 
   const byBucket = useMemo(() => ({
     auto:   proposals.filter(p => p.bucket === 'auto'),
@@ -148,6 +154,13 @@ export default function OrganizePage() {
   }), [proposals])
 
   function handleScan() {
+    if (isDemoExpired()) {
+      setShowExpired(true)
+      return
+    }
+    const used = incrementDemoScans()
+    setScansUsed(used)
+    window.dispatchEvent(new Event('mm:demo-scan'))
     setScanState('scanning')
     setScanProgress(0)
     const steps = [10, 25, 45, 65, 80, 92, 100]
@@ -239,6 +252,11 @@ export default function OrganizePage() {
           <FolderSearch className="mb-4 size-10 text-gray-300 animate-float" />
           <h3 className="text-sm font-medium text-gray-600">No folder scanned yet</h3>
           <p className="mt-1 text-xs text-gray-400">Click Scan Folder to get started</p>
+          {scansUsed > 0 && (
+            <p className="mt-3 text-xs text-amber-600 font-medium">
+              {DEMO_LIMIT - scansUsed} demo scan{DEMO_LIMIT - scansUsed !== 1 ? 's' : ''} remaining
+            </p>
+          )}
         </div>
       )}
 
@@ -317,6 +335,7 @@ export default function OrganizePage() {
       )}
 
       <ToastContainer />
+      <DemoExpiredModal open={showExpired} onClose={() => setShowExpired(false)} />
     </div>
   )
 }
