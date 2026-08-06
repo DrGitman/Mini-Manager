@@ -115,7 +115,7 @@ export default function UpgradePage() {
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-8 pb-8">
       {/* Page header */}
       <div className="text-center">
         <h1 className="text-3xl font-bold text-foreground">Upgrade Mini Manager</h1>
@@ -137,7 +137,7 @@ export default function UpgradePage() {
       </div>
 
       {/* Plan cards */}
-      <div className="grid grid-cols-3 gap-4 items-start">
+      <div className="grid grid-cols-3 gap-4 items-start pt-5 overflow-visible">
         {/* Free */}
         <Card className="bg-card border border-border rounded-lg shadow-sm">
           <CardHeader className="pb-4">
@@ -161,13 +161,13 @@ export default function UpgradePage() {
         </Card>
 
         {/* Pro — elevated */}
-        <Card className="bg-card border-2 border-primary rounded-lg shadow-md relative">
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-            <Badge className="bg-primary text-primary-foreground shadow-sm">
-              Most Popular
-            </Badge>
-          </div>
-          <CardHeader className="pb-4 pt-6">
+        <Card className="bg-card border-2 border-primary rounded-lg shadow-md">
+          <CardHeader className="pb-4 pt-5">
+            <div className="flex justify-center -mt-5 mb-3">
+              <Badge className="bg-primary text-primary-foreground shadow-sm">
+                Most Popular
+              </Badge>
+            </div>
             <CardTitle className="text-lg font-semibold text-primary">Pro</CardTitle>
             <div>
               <span className="text-3xl font-bold text-foreground">${proPrice}</span>

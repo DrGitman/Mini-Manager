@@ -20,7 +20,7 @@ export default function LegalLayout({
             Back
           </Link>
           <Link href="/">
-            <Image src="/logo-blue-full.png" alt="Mini Manager" width={120} height={40} className="object-contain" />
+            <Image src="/logo-dark_blue-full.png" alt="Mini Manager" width={120} height={40} className="object-contain" />
           </Link>
           {/* Spacer to balance the back button */}
           <div className="w-12" />

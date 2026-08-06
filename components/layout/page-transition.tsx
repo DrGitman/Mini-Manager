@@ -18,7 +18,7 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-      className="h-full w-full"
+      className="min-h-full w-full"
       style={{
         opacity: visible ? 1 : 0,
         transform: visible ? 'translateY(0)' : 'translateY(6px)',

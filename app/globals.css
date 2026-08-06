@@ -180,6 +180,16 @@
   animation: page-in 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* Auth panel swap — stay hidden while blue panel slides, then fade in */
+@keyframes auth-form-in {
+  0%   { opacity: 0; }
+  55%  { opacity: 0; }
+  100% { opacity: 1; }
+}
+.animate-auth-form-in {
+  animation: auth-form-in 0.65s ease forwards;
+}
+
 /* ── Card stagger children ───────────────────────────────── */
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(12px); }
