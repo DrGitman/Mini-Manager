@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
+import { apiSavePreferences } from '@/lib/api'
 import {
   Layers,
   Sparkles,
@@ -71,16 +73,14 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
     {
       icon: <Shield className="size-4 text-indigo-600" />,
       title: 'Never Deletes',
-      desc: 'Files go to Quarantine — never the trash',
+      desc: 'Files go to Quarantine, never the trash',
     },
   ]
 
   return (
     <div className="flex flex-col items-center gap-6 px-2 py-4 text-center">
-      {/* Logo mark */}
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 border border-indigo-100">
-        <Layers className="text-primary" size={32} strokeWidth={1.75} />
-      </div>
+      {/* Logo */}
+      <Image src="/logo-dark_blue-full.png" alt="Mini Manager" width={120} height={40} className="object-contain" />
 
       {/* Heading */}
       <div className="flex flex-col gap-2">
@@ -508,7 +508,33 @@ export default function OnboardingPage() {
     })
   }
 
-  function finish() {
+  async function finish() {
+    // Map onboarding values to backend preference schema
+    const namingMap: Record<NamingConvention, string> = {
+      'date-first': 'title',
+      'subject-first': 'title',
+      'keep-clean': 'original',
+    }
+    const folderCategoryMap: Record<FolderKey, string[]> = {
+      downloads: ['Images', 'Videos', 'Archives', 'Code'],
+      desktop:   ['Documents', 'Finance'],
+      documents: ['Documents', 'Finance', 'Data'],
+    }
+    const categories = Array.from(
+      new Set(Array.from(selectedFolders).flatMap(k => folderCategoryMap[k]))
+    )
+    const targetFolder = selectedFolders.has('desktop') ? 'Desktop'
+      : selectedFolders.has('documents') ? 'Documents'
+      : 'Downloads'
+
+    // Save to backend (non-blocking — don't block navigation on failure)
+    apiSavePreferences({
+      naming_style: namingMap[namingConvention] ?? 'title',
+      categories: categories.length ? categories : ['Documents', 'Images', 'Videos', 'Audio', 'Code', 'Archives'],
+      target_folder: targetFolder,
+      quarantine_mode: 'auto',
+    }).catch(() => {/* silent */})
+
     router.push('/organize')
   }
 

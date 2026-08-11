@@ -7,7 +7,8 @@ import { Eye, EyeOff } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { signIn } from '@/lib/session'
+import { saveSession } from '@/lib/session'
+import { apiLogin } from '@/lib/api'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -39,10 +40,17 @@ export default function LoginPage() {
     setErrors({})
     setLoading(true)
     try {
-      signIn(email)
+      const res = await apiLogin(email, password)
+      const initials = res.name.split(' ').slice(0, 2).map((w: string) => w[0].toUpperCase()).join('')
+      saveSession(
+        { name: res.name, email: res.email, avatarInitials: initials, plan: res.plan as 'free' | 'pro' | 'business', joinedAt: Date.now() },
+        res.access_token,
+        rememberMe,
+      )
       router.push('/organize')
-    } catch {
-      setErrors({ form: 'Something went wrong. Please try again.' })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Something went wrong.'
+      setErrors({ form: msg })
       setLoading(false)
     }
   }
@@ -93,7 +101,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => setShowPassword(v => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-3 top-1/2 -translate-y-1/2 z-10 text-gray-400 hover:text-gray-600"
               tabIndex={-1}
             >
               {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}

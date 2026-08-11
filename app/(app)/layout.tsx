@@ -8,6 +8,7 @@ import { AiPanel } from '@/components/layout/ai-panel'
 import { PageTransition } from '@/components/layout/page-transition'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getSession } from '@/lib/session'
+import { PreferencesProvider } from '@/lib/preferences-context'
 import type { DemoUser } from '@/lib/types'
 
 const UNREAD_COUNT = 3
@@ -41,6 +42,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
+    <PreferencesProvider>
     <div className="flex h-screen overflow-hidden bg-white">
       {/* Sidebar */}
       <Sidebar user={user} unreadCount={UNREAD_COUNT} />
@@ -70,5 +72,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         />
       )}
     </div>
+    </PreferencesProvider>
   )
 }

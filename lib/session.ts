@@ -3,17 +3,30 @@
 import type { DemoUser } from './types'
 
 const SESSION_KEY = 'mm.session'
+const TOKEN_KEY   = 'mm.token'
 
 export function getSession(): DemoUser | null {
   if (typeof window === 'undefined') return null
   try {
-    const raw = localStorage.getItem(SESSION_KEY)
+    const raw = localStorage.getItem(SESSION_KEY) ?? sessionStorage.getItem(SESSION_KEY)
     return raw ? (JSON.parse(raw) as DemoUser) : null
   } catch {
     return null
   }
 }
 
+export function saveSession(user: DemoUser, token: string, remember = true): void {
+  const store = remember ? localStorage : sessionStorage
+  store.setItem(SESSION_KEY, JSON.stringify(user))
+  store.setItem(TOKEN_KEY, token)
+}
+
+export function getToken(): string | null {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY)
+}
+
+/** Legacy helper kept for compatibility — use saveSession for real auth */
 export function signIn(email: string, name?: string): DemoUser {
   const cleanName =
     name?.trim() ||
@@ -55,4 +68,7 @@ export function updateUser(patch: Partial<DemoUser>): DemoUser | null {
 
 export function signOut(): void {
   localStorage.removeItem(SESSION_KEY)
+  localStorage.removeItem(TOKEN_KEY)
+  sessionStorage.removeItem(SESSION_KEY)
+  sessionStorage.removeItem(TOKEN_KEY)
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { FolderOpen, FolderSearch, ArrowRight, CheckSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -11,13 +11,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { SuccessCheck } from '@/components/ui/success-check'
 import { useToast } from '@/components/ui/toast'
 import { FixedBar } from '@/components/ui/fixed-bar'
-import { DEMO_LIBRARY } from '@/lib/demo-data'
-import { runHeuristics } from '@/lib/heuristics'
-import { DEFAULT_PREFERENCES } from '@/lib/types'
-import type { Proposal, ConfidenceBucket } from '@/lib/types'
+import type { FileMeta, Proposal, ConfidenceBucket } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { getDemoScansUsed, incrementDemoScans, isDemoExpired, DEMO_LIMIT } from '@/lib/demo'
 import { DemoExpiredModal } from '@/components/ui/demo-expired-modal'
+import { apiClassify, apiSaveScan } from '@/lib/api'
+import type { ClassificationResult } from '@/lib/api'
 
 function confidenceColor(c: number) {
   if (c >= 0.85) return 'bg-green-50 text-green-700 border-green-200'
@@ -46,9 +45,10 @@ interface FileTableProps {
   selected: Set<string>
   onToggle: (id: string) => void
   onToggleAll: (ids: string[]) => void
+  folderName: string
 }
 
-function FileTable({ proposals, selected, onToggle, onToggleAll }: FileTableProps) {
+function FileTable({ proposals, selected, onToggle, onToggleAll, folderName }: FileTableProps) {
   const ids = proposals.map(p => p.id)
   const allChecked = ids.length > 0 && ids.every(id => selected.has(id))
 
@@ -70,7 +70,7 @@ function FileTable({ proposals, selected, onToggle, onToggleAll }: FileTableProp
               <th className="w-10 px-3 py-3 text-left">
                 <Checkbox
                   checked={allChecked}
-                  onCheckedChange={checked => checked ? onToggleAll(ids) : onToggleAll([])}
+                  onCheckedChange={() => onToggleAll(ids)}
                 />
               </th>
               <th className="px-3 py-3 text-left text-xs font-medium text-gray-400">File</th>
@@ -101,7 +101,7 @@ function FileTable({ proposals, selected, onToggle, onToggleAll }: FileTableProp
                     <span className="truncate max-w-[150px] text-gray-600 text-xs" title={p.file.name}>{p.file.name}</span>
                   </div>
                 </td>
-                <td className="px-3 py-2.5 text-xs text-gray-400 max-w-[100px] truncate">Downloads/</td>
+                <td className="px-3 py-2.5 text-xs text-gray-400 max-w-[100px] truncate">{folderName}/</td>
                 <td className="px-1 text-gray-300"><ArrowRight className="size-3.5 shrink-0" /></td>
                 <td className="px-3 py-2.5">
                   <span className="font-mono text-xs font-semibold text-gray-800 truncate max-w-[150px] block" title={p.newName}>{p.newName}</span>
@@ -143,6 +143,10 @@ export default function OrganizePage() {
   const [applyProgress, setApplyProgress] = useState(0)
   const [showExpired, setShowExpired] = useState(false)
   const [scansUsed, setScansUsed] = useState(0)
+  const [folderName, setFolderName] = useState('folder')
+  const fileMapRef = useRef<Map<string, FileMeta>>(new Map())
+  const fileHandlesRef = useRef<Map<string, FileSystemFileHandle>>(new Map())
+  const dirHandleRef = useRef<FileSystemDirectoryHandle | null>(null)
   const { toast, ToastContainer } = useToast()
 
   useEffect(() => { setScansUsed(getDemoScansUsed()) }, [])
@@ -153,36 +157,117 @@ export default function OrganizePage() {
     input:  proposals.filter(p => p.bucket === 'input'),
   }), [proposals])
 
-  function handleScan() {
+  async function handleScan() {
     if (isDemoExpired()) {
       setShowExpired(true)
       return
     }
-    const used = incrementDemoScans()
-    setScansUsed(used)
-    window.dispatchEvent(new Event('mm:demo-scan'))
-    setScanState('scanning')
-    setScanProgress(0)
-    const steps = [10, 25, 45, 65, 80, 92, 100]
-    let i = 0
-    const tick = () => {
-      if (i < steps.length) {
-        setScanProgress(steps[i++])
-        setTimeout(tick, 120)
-      } else {
-        const { proposals: hProps, ambiguous } = runHeuristics(DEMO_LIBRARY, [], DEFAULT_PREFERENCES)
-        const fallbacks: Proposal[] = ambiguous.map(f => ({
-          id: `p-${f.id}`, file: f, targetFolder: 'Documents', newName: f.name,
-          category: 'Unknown', reason: 'Extension not recognised — please review before moving.',
-          confidence: 0.55, bucket: 'input' as ConfidenceBucket, selected: false, source: 'heuristic' as const,
-        }))
-        const all = [...hProps, ...fallbacks]
-        setProposals(all)
-        setSelected(new Set(all.filter(p => p.bucket === 'auto').map(p => p.id)))
-        setScanState('done')
-      }
+
+    // Open real folder picker
+    if (!('showDirectoryPicker' in window)) {
+      toast('Your browser doesn\'t support folder picking. Please use Chrome or Edge.')
+      return
     }
-    setTimeout(tick, 80)
+
+    let dirHandle: FileSystemDirectoryHandle
+    try {
+      dirHandle = await (window as any).showDirectoryPicker({ mode: 'readwrite' })
+    } catch {
+      return // user cancelled
+    }
+
+    setFolderName(dirHandle.name)
+    dirHandleRef.current = dirHandle
+    setScanState('scanning')
+    setScanProgress(10)
+
+    // Read file metadata and handles from the selected folder
+    const realFiles: FileMeta[] = []
+    const handleMap = new Map<string, FileSystemFileHandle>()
+    try {
+      for await (const [name, handle] of (dirHandle as any).entries()) {
+        if (handle.kind !== 'file') continue
+        const file = await (handle as FileSystemFileHandle).getFile()
+        const ext = name.includes('.') ? '.' + name.split('.').pop()!.toLowerCase() : ''
+        const id = crypto.randomUUID()
+        const meta: FileMeta = {
+          id,
+          name,
+          extension: ext,
+          relativePath: name,
+          sizeBytes: file.size,
+          modifiedAt: file.lastModified,
+        }
+        realFiles.push(meta)
+        handleMap.set(id, handle as FileSystemFileHandle)
+        if (realFiles.length >= 500) break // cap at 500
+      }
+    } catch {
+      setScanState('idle')
+      toast('Could not read folder contents.')
+      return
+    }
+
+    if (realFiles.length === 0) {
+      setScanState('idle')
+      toast('No files found in that folder.')
+      return
+    }
+
+    // Store file map and handle map for result lookup and apply
+    fileMapRef.current = new Map(realFiles.map(f => [f.id, f]))
+    fileHandlesRef.current = handleMap
+
+    setScanProgress(30)
+
+    // Animate progress while API call runs
+    const steps = [45, 60, 75, 85]
+    let i = 0
+    const tick = () => { if (i < steps.length) { setScanProgress(steps[i++]); setTimeout(tick, 200) } }
+    setTimeout(tick, 100)
+
+    try {
+      const files = realFiles.map(f => ({
+        id: f.id,
+        name: f.name,
+        extension: f.extension,
+        size: f.sizeBytes,
+        modified_at: f.modifiedAt,
+      }))
+
+      const res = await apiClassify(files)
+      setScanProgress(100)
+
+      const all: Proposal[] = res.results.map((r: ClassificationResult) => {
+        const file = fileMapRef.current.get(r.id) ?? { id: r.id, name: r.id, extension: '', relativePath: '', sizeBytes: 0, modifiedAt: Date.now() }
+        const bucket: ConfidenceBucket =
+          r.confidence >= 0.85 ? 'auto' : r.confidence >= 0.7 ? 'review' : 'input'
+        return {
+          id: `p-${r.id}`,
+          file,
+          targetFolder: r.target_folder,
+          newName: r.new_name,
+          category: r.category,
+          reason: r.reason,
+          confidence: r.confidence,
+          bucket,
+          selected: false,
+          source: r.source,
+        }
+      })
+
+      // Only count as a used scan on success
+      const used = incrementDemoScans()
+      setScansUsed(used)
+      window.dispatchEvent(new Event('mm:demo-scan'))
+      setProposals(all)
+      setSelected(new Set(all.filter(p => p.bucket === 'auto').map(p => p.id)))
+      setScanState('done')
+    } catch {
+      setScanState('idle')
+      setScanProgress(0)
+      toast('Failed to classify files. Please try again.')
+    }
   }
 
   function toggleOne(id: string) {
@@ -204,18 +289,72 @@ export default function OrganizePage() {
 
   async function handleApply() {
     if (applyState !== 'idle' || selected.size === 0) return
+    if (!dirHandleRef.current) {
+      toast('No folder open. Please scan again.')
+      return
+    }
+
     const count = selected.size
     setApplyState('loading')
     setApplyProgress(0)
-    for (let i = 0; i <= 100; i += 4) {
-      await new Promise(r => setTimeout(r, 60))
-      setApplyProgress(i)
+
+    const toApply = proposals.filter(p => selected.has(p.id))
+    const succeeded: Proposal[] = []
+    const failed: string[] = []
+
+    for (let i = 0; i < toApply.length; i++) {
+      const proposal = toApply[i]
+      try {
+        const fileHandle = fileHandlesRef.current.get(proposal.file.id)
+        if (!fileHandle) throw new Error('No handle')
+
+        // Read original file content
+        const file = await fileHandle.getFile()
+        const buffer = await file.arrayBuffer()
+
+        // Navigate / create target subdirectories inside the selected folder
+        const parts = proposal.targetFolder.split('/').filter(Boolean)
+        let targetDir: FileSystemDirectoryHandle = dirHandleRef.current
+        for (const part of parts) {
+          targetDir = await targetDir.getDirectoryHandle(part, { create: true })
+        }
+
+        // Write new file with proposed name
+        const newHandle = await targetDir.getFileHandle(proposal.newName, { create: true })
+        const writable = await (newHandle as any).createWritable()
+        await writable.write(buffer)
+        await writable.close()
+
+        // Delete original from root of selected folder
+        await dirHandleRef.current.removeEntry(proposal.file.name)
+
+        succeeded.push(proposal)
+      } catch (err) {
+        console.error('Failed to move', proposal.file.name, err)
+        failed.push(proposal.file.name)
+      }
+      setApplyProgress(Math.round(((i + 1) / toApply.length) * 100))
     }
-    setProposals(prev => prev.filter(p => !selected.has(p.id)))
-    setSelected(new Set())
+
+    // Show success state on the button first (bar stays visible while applyState !== 'idle')
     setApplyState('success')
-    toast(`${count} file${count !== 1 ? 's' : ''} organised successfully`)
+
+    if (failed.length === 0) {
+      toast(`${succeeded.length} file${succeeded.length !== 1 ? 's' : ''} organised successfully`)
+    } else {
+      toast(`${succeeded.length} organised, ${failed.length} failed`, 'error')
+    }
+
+    // Save to backend (non-blocking)
+    apiSaveScan(folderName, succeeded.length, succeeded.map(p => ({
+      id: p.id, newName: p.newName, targetFolder: p.targetFolder, category: p.category,
+    }))).catch(() => {})
+
+    // Wait for user to see the ✓, then clear
     await new Promise(r => setTimeout(r, 2500))
+    const succeededIds = new Set(succeeded.map(p => p.id))
+    setProposals(prev => prev.filter(p => !succeededIds.has(p.id)))
+    setSelected(new Set())
     setApplyState('idle')
     setApplyProgress(0)
   }
@@ -228,7 +367,7 @@ export default function OrganizePage() {
       {/* Top action bar — only scan button when idle/scanning, apply when done */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-400">
-          {scanState === 'idle' && 'Select a folder to get started'}
+          {scanState === 'idle' && 'Pick a folder to scan'}
           {scanState === 'scanning' && 'Scanning your folder…'}
           {scanState === 'done' && `${proposals.length} proposals found`}
         </p>
@@ -264,7 +403,7 @@ export default function OrganizePage() {
       {scanState === 'scanning' && (
         <div className="rounded-2xl border border-gray-100 bg-white p-6">
           <div className="mb-2 flex items-center justify-between text-sm">
-            <span className="font-medium text-gray-700">Scanning Downloads…</span>
+            <span className="font-medium text-gray-700">Scanning {folderName}…</span>
             <span className="text-gray-400">{scanProgress}%</span>
           </div>
           <Progress value={scanProgress} className="h-1.5" />
@@ -291,19 +430,19 @@ export default function OrganizePage() {
           </TabsList>
 
           <TabsContent value="auto" className="mt-4">
-            <FileTable proposals={byBucket.auto} selected={selected} onToggle={toggleOne} onToggleAll={toggleMany} />
+            <FileTable proposals={byBucket.auto} selected={selected} onToggle={toggleOne} onToggleAll={toggleMany} folderName={folderName} />
           </TabsContent>
           <TabsContent value="review" className="mt-4">
-            <FileTable proposals={byBucket.review} selected={selected} onToggle={toggleOne} onToggleAll={toggleMany} />
+            <FileTable proposals={byBucket.review} selected={selected} onToggle={toggleOne} onToggleAll={toggleMany} folderName={folderName} />
           </TabsContent>
           <TabsContent value="input" className="mt-4">
-            <FileTable proposals={byBucket.input} selected={selected} onToggle={toggleOne} onToggleAll={toggleMany} />
+            <FileTable proposals={byBucket.input} selected={selected} onToggle={toggleOne} onToggleAll={toggleMany} folderName={folderName} />
           </TabsContent>
         </Tabs>
       )}
 
       {/* Fixed bottom bar — only when files are selected */}
-      {scanState === 'done' && selectedCount > 0 && (
+      {scanState === 'done' && (selectedCount > 0 || applyState !== 'idle') && (
         <FixedBar>
         <div className="fixed bottom-0 left-56 right-0 z-50 flex items-center gap-3 border-t border-gray-100 bg-white/95 px-8 py-3 backdrop-blur-sm">
           <span className="text-sm text-gray-500">

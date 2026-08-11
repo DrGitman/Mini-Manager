@@ -1,6 +1,7 @@
 'use client'
 
 import { Download, Sparkles } from 'lucide-react'
+import { DEMO_LIMIT } from '@/lib/demo'
 
 interface DemoExpiredModalProps {
   open: boolean
@@ -27,7 +28,7 @@ export function DemoExpiredModal({ open, onClose }: DemoExpiredModalProps) {
 
         <h2 className="text-xl font-bold text-gray-900">Demo limit reached</h2>
         <p className="mt-2 text-sm text-gray-500 leading-relaxed">
-          You&apos;ve used all 3 free demo scans. Get the full desktop app for
+          You&apos;ve used all {DEMO_LIMIT} free demo scans. Get the full desktop app for
           unlimited scans, AI organisation, and complete undo history.
         </p>
 
