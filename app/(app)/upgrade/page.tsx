@@ -25,7 +25,7 @@ const FREE_FEATURES = [
   '200 AI classifications/month',
   '3 document explanations/month',
   '1 naming convention preset',
-  'Unlimited undo & quarantine',
+  'Unlimited undo & archive',
 ]
 
 const PRO_FEATURES = [
@@ -216,7 +216,7 @@ export default function UpgradePage() {
 
       {/* Footer note */}
       <p className="text-center text-sm text-muted-foreground">
-        All plans include unlimited undo, quarantine, and blocked-path protection.{' '}
+        All plans include unlimited undo, archive, and blocked-path protection.{' '}
         <span className="font-medium text-foreground">We never paywall safety.</span>
       </p>
 
@@ -245,7 +245,7 @@ export default function UpgradePage() {
               <p className="text-sm font-medium text-foreground mb-1">Payment instructions</p>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 Transfer <span className="font-medium text-foreground">${proPrice}</span> to{' '}
-                <span className="font-mono text-foreground">First National Bank — Acc: 62012345678</span>{' '}
+                <span className="font-mono text-foreground">First National Bank, Acc: 62012345678</span>{' '}
                 referencing your invoice number{' '}
                 <span className="font-medium text-foreground">INV-2026-0031</span>.
               </p>
@@ -310,7 +310,7 @@ export default function UpgradePage() {
                   &ldquo;{t.quote}&rdquo;
                 </p>
                 <p className="text-xs text-muted-foreground font-medium">
-                  — {t.author}, {t.location}
+                  {t.author}, {t.location}
                 </p>
               </CardContent>
             </Card>

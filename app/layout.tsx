@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 
 export const metadata: Metadata = {
   title: {
-    default: 'Mini Manager — AI File Organizer',
+    default: 'Mini Manager: AI File Organizer',
     template: '%s · Mini Manager',
   },
   description:

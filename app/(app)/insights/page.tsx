@@ -217,9 +217,9 @@ function StaleFilesCard({ files, loading }: { files: StaleFile[]; loading: boole
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function InsightsPage() {
-  const [stats, setStats]           = useState<DashboardStats | null>(null)
-  const [insights, setInsights]     = useState<InsightsData | null>(null)
-  const [statsLoading, setStatsLoading]     = useState(true)
+  const [stats, setStats]                     = useState<DashboardStats | null>(null)
+  const [insights, setInsights]               = useState<InsightsData | null>(null)
+  const [statsLoading, setStatsLoading]       = useState(true)
   const [insightsLoading, setInsightsLoading] = useState(true)
 
   useEffect(() => {
@@ -232,10 +232,7 @@ export default function InsightsPage() {
       .finally(() => setInsightsLoading(false))
   }, [])
 
-  const pendingProposals = stats
-    ? (stats.proposals.auto + stats.proposals.review + stats.proposals.manual)
-    : 0
-  const topFiles = stats?.top_files ?? []
+  const topFiles   = stats?.top_files ?? []
   const duplicates = insights?.duplicates ?? []
   const staleFiles = insights?.stale_files ?? []
 
@@ -244,42 +241,45 @@ export default function InsightsPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Insights</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Real analysis from your scan history — duplicates, stale files, and space usage.
+          Duplicate files, stale content, and space you can recover.
         </p>
       </div>
 
       {/* Stat row */}
       <div className="grid grid-cols-4 gap-4">
         <StatCard
-          icon={FileSearch}
-          label="Files Scanned"
-          value={stats?.total_files_scanned ?? 0}
-          sub={`across ${stats?.total_scans ?? 0} scans`}
-          loading={statsLoading}
-        />
-        <StatCard
           icon={HardDrive}
-          label="Total Scans"
-          value={stats?.total_scans ?? 0}
-          loading={statsLoading}
+          label="Space to recover"
+          value={formatBytes((insights?.duplicate_size_bytes ?? 0) + (insights?.stale_size_bytes ?? 0))}
+          sub="duplicates and stale files"
+          loading={insightsLoading}
         />
         <StatCard
           icon={Copy}
-          label="Pending Proposals"
-          value={statsLoading ? '—' : pendingProposals}
-          sub={statsLoading ? undefined : `${stats?.proposals.auto ?? 0} auto · ${stats?.proposals.review ?? 0} review · ${stats?.proposals.manual ?? 0} manual`}
-          loading={statsLoading}
+          label="Duplicate pairs"
+          value={duplicates.length}
+          sub={duplicates.length > 0 ? 'detected across your scans' : 'none detected'}
+          loading={insightsLoading}
         />
         <StatCard
           icon={AlertTriangle}
-          label="Stale Files"
-          value={insightsLoading ? '—' : staleFiles.length}
-          sub={insightsLoading ? undefined : staleFiles.length > 0 ? `${formatBytes(insights?.stale_size_bytes ?? 0)} recoverable` : 'none detected'}
+          label="Stale files"
+          value={staleFiles.length}
+          sub={staleFiles.length > 0
+            ? `${formatBytes(insights?.stale_size_bytes ?? 0)} recoverable`
+            : 'none detected'}
           loading={insightsLoading}
+        />
+        <StatCard
+          icon={FileSearch}
+          label="Largest file"
+          value={topFiles[0] ? formatBytes(topFiles[0].size_bytes) : '\u2014'}
+          sub={topFiles[0]?.name ?? 'scan to see'}
+          loading={statsLoading}
         />
       </div>
 
-      {/* Large Files — real data */}
+      {/* Large Files */}
       <Card className="bg-card border border-border rounded-lg shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold">Large Files</CardTitle>
@@ -315,10 +315,10 @@ export default function InsightsPage() {
         </CardContent>
       </Card>
 
-      {/* Duplicates — real data */}
+      {/* Duplicates */}
       <DuplicatesCard pairs={duplicates} loading={insightsLoading} />
 
-      {/* Stale files — real data */}
+      {/* Stale files */}
       <StaleFilesCard files={staleFiles} loading={insightsLoading} />
 
       {/* Space summary */}

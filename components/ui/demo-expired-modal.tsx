@@ -40,7 +40,7 @@ export function DemoExpiredModal({ open, onClose }: DemoExpiredModalProps) {
             className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary text-sm font-semibold text-white transition-colors hover:bg-primary/90"
           >
             <Download className="size-4" />
-            Download Mini Manager — Free
+            Download Mini Manager, Free
           </a>
           <button
             onClick={onClose}

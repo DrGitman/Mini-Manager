@@ -10,17 +10,17 @@ const TESTIMONIALS = [
   {
     quote: 'Cut my Downloads folder from 1,847 files to 12 clean folders in 20 minutes. Nothing else comes close.',
     name: 'Amara K.',
-    role: 'Freelance Designer — Windhoek',
+    role: 'Freelance Designer, Windhoek',
   },
   {
     quote: 'The undo feature alone is worth it. I accidentally moved a whole project folder and got it back in one click.',
     name: 'Jürgen M.',
-    role: 'Software Engineer — Berlin',
+    role: 'Software Engineer, Berlin',
   },
   {
     quote: 'Finally understand my own file structure. The AI naming is scary accurate.',
     name: 'Thandiwe N.',
-    role: 'Accountant — Johannesburg',
+    role: 'Accountant, Johannesburg',
   },
 ]
 

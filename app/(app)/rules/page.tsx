@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Plus, Trash2, CheckCircle2, Info, Loader2, FolderOpen, Tag, Clock, HardDrive } from 'lucide-react'
+import { Plus, Trash2, CheckCircle2, Info, Loader2, FolderOpen, Tag, Clock, HardDrive, SpellCheck2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
@@ -36,6 +36,7 @@ export default function RulesPage() {
   const [compiled, setCompiled] = useState<CompiledRule | null>(null)
   const [compileError, setCompileError] = useState<string | null>(null)
   const [addingRule, setAddingRule] = useState(false)
+  const [correctedText, setCorrectedText] = useState<string | null>(null)
 
   useEffect(() => {
     apiGetRules().then(setRules).catch(() => {}).finally(() => setLoading(false))
@@ -61,8 +62,13 @@ export default function RulesPage() {
     setCompiling(true)
     setCompiled(null)
     setCompileError(null)
+    setCorrectedText(null)
     try {
-      setCompiled(await apiCompileRule(draftText.trim()))
+      const result = await apiCompileRule(draftText.trim())
+      if (result.corrected_input && result.corrected_input !== draftText.trim()) {
+        setCorrectedText(result.corrected_input)
+      }
+      setCompiled(result)
     } catch (e: unknown) {
       setCompileError(e instanceof Error ? e.message : 'Failed to compile rule')
     } finally {
@@ -98,6 +104,7 @@ export default function RulesPage() {
     setDraftText('')
     setCompiled(null)
     setCompileError(null)
+    setCorrectedText(null)
   }
 
   const enabledCount = rules.filter(r => r.enabled).length
@@ -107,7 +114,7 @@ export default function RulesPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Rules</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Write rules in plain English — Mini Manager follows them on every scan.
+          Write rules in plain English. Mini Manager follows them on every scan.
         </p>
       </div>
 
@@ -196,6 +203,15 @@ export default function RulesPage() {
                   <Button variant="outline" onClick={handleCancel}>Cancel</Button>
                 </div>
                 {compileError && <p className="text-sm text-destructive">{compileError}</p>}
+                {correctedText && (
+                  <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800/50 dark:bg-amber-950/20 px-3 py-2">
+                    <SpellCheck2 className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div className="text-xs text-amber-700 dark:text-amber-400">
+                      <span className="font-medium">Spelling corrected: </span>
+                      {correctedText}
+                    </div>
+                  </div>
+                )}
                 {compiled && (
                   <div className="rounded-lg border border-border bg-muted/30 p-4 flex flex-col gap-3">
                     <div className="flex items-center gap-2">
@@ -224,7 +240,7 @@ export default function RulesPage() {
         <CardContent className="flex items-start gap-3 pt-5 pb-5">
           <Info className="h-4 w-4 text-primary mt-0.5 shrink-0" />
           <p className="text-sm text-muted-foreground">
-            Rules run before AI classification — they always take priority. Toggle a rule off to pause it without deleting it.
+            Rules run before AI classification and always take priority. Toggle a rule off to pause it without deleting it.
           </p>
         </CardContent>
       </Card>

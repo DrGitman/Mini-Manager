@@ -73,7 +73,7 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
     {
       icon: <Shield className="size-4 text-indigo-600" />,
       title: 'Never Deletes',
-      desc: 'Files go to Quarantine, never the trash',
+      desc: 'Files go to Archive, never the trash',
     },
   ]
 
@@ -338,9 +338,9 @@ function StepNaming({
 // ─── Step 4: Safety Settings ──────────────────────────────────────────────────
 
 const SAFETY_POINTS = [
-  'Every change is previewed first — you approve before anything moves',
-  'Nothing is ever deleted — files go to Quarantine, not the trash',
-  'One-click undo — every batch can be reversed instantly',
+  'Every change is previewed first. You approve before anything moves.',
+  'Nothing is ever deleted. Files go to Archive, not the trash.',
+  'One-click undo: every batch can be reversed instantly.',
 ]
 
 function StepSafety({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
@@ -379,7 +379,7 @@ function StepSafety({ onNext, onBack }: { onNext: () => void; onBack: () => void
           </span>
         </div>
         <p className="mb-4 text-xs text-muted-foreground">
-          Auto-apply at 85% confidence or above — everything else is flagged for your review.
+          Auto-apply at 85% confidence or above. Everything else is flagged for your review.
         </p>
         {/* Visual slider track */}
         <div className="relative h-2 w-full rounded-full bg-muted">

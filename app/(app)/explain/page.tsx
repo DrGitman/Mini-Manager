@@ -159,7 +159,7 @@ function DropZone({
       <Upload className="mx-auto h-8 w-8 text-muted-foreground/50 mb-3" />
       <p className="text-sm font-medium text-foreground">Drop a file here or click to browse</p>
       <p className="mt-1 text-xs text-muted-foreground">
-        PDF, Word, text files, images, audio — any file type
+        PDF, Word, text files, images, audio, any file type
       </p>
       <input
         ref={inputRef}
@@ -264,7 +264,7 @@ export default function ExplainPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Explain File</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Upload a document or paste a filename — AI tells you what it contains, how to rename it, and where to file it.
+          Upload a document or paste a filename. AI will tell you what it contains, how to rename it, and where to file it.
         </p>
       </div>
 
@@ -316,7 +316,7 @@ export default function ExplainPage() {
           <div className="flex items-start gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground shadow-sm">
             <Info className="h-4 w-4 shrink-0 text-primary mt-0.5" />
             <span>
-              Supported: PDF, Word (name-based), text, CSV, JSON, images, and more. For PDFs, the first 3 pages are read automatically. Nothing is stored — files are analysed and discarded.
+              Supported: PDF, Word (name-based), text, CSV, JSON, images, and more. For PDFs, the first 3 pages are read automatically. Nothing is stored and files are discarded after analysis.
             </span>
           </div>
         </TabsContent>
@@ -361,7 +361,7 @@ export default function ExplainPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="sizeKb" className="text-sm font-medium">
-                    Size (KB) <span className="text-muted-foreground font-normal">— optional</span>
+                    Size (KB) <span className="text-muted-foreground font-normal">(optional)</span>
                   </Label>
                   <Input
                     id="sizeKb"
@@ -375,7 +375,7 @@ export default function ExplainPage() {
 
               <div className="space-y-1.5">
                 <Label htmlFor="preview" className="text-sm font-medium">
-                  Content snippet <span className="text-muted-foreground font-normal">— optional, improves accuracy</span>
+                  Content snippet <span className="text-muted-foreground font-normal">(optional, improves accuracy)</span>
                 </Label>
                 <Textarea
                   id="preview"

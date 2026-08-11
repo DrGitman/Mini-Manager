@@ -253,7 +253,7 @@ export default function SettingsPage() {
             <div className="space-y-0.5">
               <p className="text-sm font-medium text-foreground">Downloads</p>
               <p className="text-xs text-muted-foreground">
-                C:\Users\{userName}\Downloads — Your main download location
+                C:\Users\{userName}\Downloads, your main download location
               </p>
             </div>
             <Switch
@@ -268,7 +268,7 @@ export default function SettingsPage() {
             <div className="space-y-0.5">
               <p className="text-sm font-medium text-foreground">Desktop</p>
               <p className="text-xs text-muted-foreground">
-                C:\Users\{userName}\Desktop — Files saved to desktop
+                C:\Users\{userName}\Desktop, files saved to the desktop
               </p>
             </div>
             <Switch
@@ -283,7 +283,7 @@ export default function SettingsPage() {
             <div className="space-y-0.5">
               <p className="text-sm font-medium text-foreground">Documents</p>
               <p className="text-xs text-muted-foreground">
-                C:\Users\{userName}\Documents — Document library
+                C:\Users\{userName}\Documents, your document library
               </p>
             </div>
             <Switch
@@ -422,7 +422,7 @@ export default function SettingsPage() {
           <Separator />
           <div className="flex items-center justify-between py-1">
             <p className="text-sm text-muted-foreground">
-              {plan === 'pro' ? 'Pro plan active' : 'Free tier — no renewal required'}
+              {plan === 'pro' ? 'Pro plan active' : 'Free tier, no renewal required'}
             </p>
             {plan !== 'pro' && (
               <a href="/upgrade" className="text-sm text-primary hover:underline font-medium">

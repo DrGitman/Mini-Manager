@@ -62,7 +62,7 @@ export default function PrivacyPage() {
           <li>To process payments and manage your subscription.</li>
           <li>To send transactional emails (account confirmation, password reset, billing receipts).</li>
           <li>
-            To send product updates and feature announcements — you may opt out of these at any time from
+            To send product updates and feature announcements. You may opt out of these at any time from
             account settings.
           </li>
           <li>To detect, prevent, and respond to fraud, abuse, or security incidents.</li>

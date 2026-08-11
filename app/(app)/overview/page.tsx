@@ -3,15 +3,15 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import {
-  FileSearch, Sparkles, HardDrive, FolderOpen,
-  CheckCircle, RotateCcw, Lightbulb, ScanLine, Loader2, Bell,
+  Sparkles, FolderOpen,
+  CheckCircle, RotateCcw, Lightbulb, ScanLine, Loader2, Bell, Trash2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { timeAgo, formatBytes } from '@/lib/types'
-import { apiGetStats, apiGetNotifications } from '@/lib/api'
-import type { DashboardStats, ApiNotification } from '@/lib/api'
+import { apiGetStats, apiGetInsights, apiGetNotifications } from '@/lib/api'
+import type { DashboardStats, InsightsData, ApiNotification } from '@/lib/api'
 
 const NOTIF_ICON: Record<string, React.ElementType> = {
   scan: ScanLine, apply: CheckCircle, undo: RotateCcw,
@@ -22,11 +22,12 @@ function notifIcon(kind: string) { return NOTIF_ICON[kind] ?? Bell }
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function StatCard({
-  icon: Icon, label, value, iconClass, loading,
+  icon: Icon, label, value, sub, iconClass, loading,
 }: {
   icon: React.ElementType
   label: string
   value: string | number
+  sub?: string
   iconClass?: string
   loading?: boolean
 }) {
@@ -35,13 +36,16 @@ function StatCard({
       <CardContent className="pt-5 pb-5">
         <div className="flex items-center gap-3">
           <div className={`rounded-md p-2 ${iconClass ?? 'bg-primary/10'}`}>
-            <Icon className={`h-5 w-5 ${iconClass ? 'text-current' : 'text-primary'}`} />
+            <Icon className="h-5 w-5 text-current" />
           </div>
           <div>
             <p className="text-sm text-muted-foreground">{label}</p>
             {loading
               ? <div className="mt-1 h-7 w-12 animate-pulse rounded bg-muted" />
               : <p className="text-2xl font-bold text-foreground">{value}</p>}
+            {sub && !loading && (
+              <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
+            )}
           </div>
         </div>
       </CardContent>
@@ -50,16 +54,16 @@ function StatCard({
 }
 
 function shortFolder(path: string): string {
-  // Show last two path segments for readability
   const parts = path.replace(/\\/g, '/').split('/').filter(Boolean)
   if (parts.length <= 2) return path
-  return '…/' + parts.slice(-2).join('/')
+  return '.../' + parts.slice(-2).join('/')
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function OverviewPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [insights, setInsights] = useState<InsightsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [recentNotifs, setRecentNotifs] = useState<ApiNotification[]>([])
@@ -67,48 +71,49 @@ export default function OverviewPage() {
   useEffect(() => {
     Promise.all([
       apiGetStats().then(setStats).catch(e => setError(e.message)),
+      apiGetInsights().then(setInsights).catch(() => {}),
       apiGetNotifications().then(r => setRecentNotifs(r.notifications.slice(0, 3))).catch(() => {}),
     ]).finally(() => setLoading(false))
   }, [])
 
-  const filesScanned = stats?.total_files_scanned ?? 0
-  const readyToOrganise = stats?.ready_to_organise ?? 0
   const proposals = stats?.proposals ?? { auto: 0, review: 0, manual: 0 }
   const recentScans = stats?.recent_scans ?? []
-  const topFiles = stats?.top_files ?? []
+
+  const reclaimableBytes =
+    (insights?.duplicate_size_bytes ?? 0) + (insights?.stale_size_bytes ?? 0)
 
   return (
-    <div className="grid grid-cols-3 gap-6">
-      {/* ------------------------------------------------------------------ */}
-      {/* LEFT COLUMN                                                          */}
-      {/* ------------------------------------------------------------------ */}
-      <div className="col-span-2 flex flex-col gap-6">
+    <div className="grid grid-cols-3 gap-4 items-start">
+      {/* ── Stat cards — row 1 ── */}
+      <StatCard
+        icon={Trash2}
+        label="Reclaimable space"
+        value={loading ? 0 : formatBytes(reclaimableBytes)}
+        sub="from duplicates + stale files"
+        iconClass="bg-green-100 text-green-600"
+        loading={loading}
+      />
+      <StatCard
+        icon={Sparkles}
+        label="Files to review"
+        value={proposals.review + proposals.manual}
+        sub="need your attention"
+        iconClass="bg-amber-100 text-amber-600"
+        loading={loading}
+      />
+      <StatCard
+        icon={CheckCircle}
+        label="Ready to apply"
+        value={proposals.auto}
+        sub="high-confidence"
+        iconClass="bg-blue-100 text-blue-600"
+        loading={loading}
+      />
 
-        {/* Stat cards */}
-        <div className="grid grid-cols-3 gap-4">
-          <StatCard
-            icon={FileSearch}
-            label="Files Scanned"
-            value={filesScanned}
-            loading={loading}
-          />
-          <StatCard
-            icon={Sparkles}
-            label="Ready to Organise"
-            value={readyToOrganise}
-            iconClass="bg-green-100 text-green-600"
-            loading={loading}
-          />
-          <StatCard
-            icon={HardDrive}
-            label="Total Scans"
-            value={stats?.total_scans ?? 0}
-            iconClass="bg-amber-100 text-amber-600"
-            loading={loading}
-          />
-        </div>
+      {/* ── Left content — rows 2+ ── */}
+      <div className="col-span-2 space-y-4">
 
-        {/* Recent Activity */}
+        {/* Recent Scans */}
         <Card className="bg-card shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-3">
             <CardTitle className="text-base font-semibold">Recent Scans</CardTitle>
@@ -123,7 +128,7 @@ export default function OverviewPage() {
             ) : recentScans.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-10 text-center">
                 <FolderOpen className="size-8 text-muted-foreground/40" />
-                <p className="text-sm text-muted-foreground">No scans yet — scan a folder to get started.</p>
+                <p className="text-sm text-muted-foreground">No scans yet. Scan a folder to get started.</p>
                 <Link href="/organize" className={buttonVariants({ size: 'sm', className: 'mt-2' })}>
                   Scan a folder
                 </Link>
@@ -137,17 +142,17 @@ export default function OverviewPage() {
                       <p className="truncate text-sm font-medium text-foreground" title={scan.folder_path}>
                         {shortFolder(scan.folder_path)}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        {timeAgo(new Date(scan.created_at).getTime())}
-                      </p>
+                      <p className="text-xs text-muted-foreground">{timeAgo(new Date(scan.created_at).getTime())}</p>
                     </div>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">
-                      {scan.file_count} files
+                    <span className="w-16 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                      {scan.file_count} {scan.file_count === 1 ? 'file' : 'files'}
                     </span>
-                    <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-0">
-                      {scan.proposal_count} proposals
-                    </Badge>
-                    <Link href="/organize" className={buttonVariants({ size: 'sm', variant: 'ghost' })}>
+                    <span className="w-28 shrink-0 text-right">
+                      <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-0">
+                        {scan.proposal_count} {scan.proposal_count === 1 ? 'proposal' : 'proposals'}
+                      </Badge>
+                    </span>
+                    <Link href="/organize" className={buttonVariants({ size: 'sm', variant: 'ghost', className: 'w-14 shrink-0 justify-end' })}>
                       Open
                     </Link>
                   </li>
@@ -167,23 +172,21 @@ export default function OverviewPage() {
               <Link href="/organize" className={buttonVariants({ className: 'flex-1' })}>
                 Scan a folder
               </Link>
+              <Link href="/history" className={buttonVariants({ variant: 'outline', className: 'flex-1' })}>
+                Undo last batch
+              </Link>
               <Link href="/insights" className={buttonVariants({ variant: 'outline', className: 'flex-1' })}>
                 View Insights
-              </Link>
-              <Link href="/rules" className={buttonVariants({ variant: 'outline', className: 'flex-1' })}>
-                Rules
               </Link>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* RIGHT COLUMN                                                         */}
-      {/* ------------------------------------------------------------------ */}
-      <div className="col-span-1 flex flex-col gap-6">
+      {/* ── Right rail — rows 2+ ── */}
+      <div className="space-y-4">
 
-        {/* AI Proposals summary — real data from latest scan */}
+        {/* AI Proposals summary */}
         <Card className="bg-card shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold">AI Proposals</CardTitle>
@@ -201,13 +204,13 @@ export default function OverviewPage() {
             ) : (
               <>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Auto-apply (≥0.85)</span>
+                  <span className="text-sm text-muted-foreground">Auto-apply (&ge;0.85)</span>
                   <Badge className="bg-green-100 text-green-700 border-0 hover:bg-green-100">
                     {proposals.auto} files
                   </Badge>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Review (0.70–0.85)</span>
+                  <span className="text-sm text-muted-foreground">Review (0.70-0.85)</span>
                   <Badge className="bg-yellow-100 text-yellow-700 border-0 hover:bg-yellow-100">
                     {proposals.review} files
                   </Badge>
@@ -219,14 +222,14 @@ export default function OverviewPage() {
                   </Badge>
                 </div>
                 <Link href="/organize" className="mt-1 text-sm text-primary hover:underline">
-                  Review proposals →
+                  Review proposals
                 </Link>
               </>
             )}
           </CardContent>
         </Card>
 
-        {/* Recent Alerts — still from notifications system */}
+        {/* Recent Alerts */}
         <Card className="bg-card shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-3">
             <CardTitle className="text-base font-semibold">Recent Alerts</CardTitle>
@@ -257,38 +260,6 @@ export default function OverviewPage() {
                     </li>
                   )
                 })}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Top files from latest scan */}
-        <Card className="bg-card shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold">Largest Files</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="space-y-2">
-                {[1,2,3].map(i => <div key={i} className="h-4 animate-pulse rounded bg-muted" />)}
-              </div>
-            ) : topFiles.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Scan a folder to see file sizes.
-              </p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {topFiles.map(f => (
-                  <li key={f.name} className="flex items-center justify-between text-sm gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-foreground" title={f.name}>{f.name}</p>
-                      <p className="text-[11px] text-muted-foreground">{f.category}</p>
-                    </div>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {formatBytes(f.size_bytes)}
-                    </span>
-                  </li>
-                ))}
               </ul>
             )}
           </CardContent>

@@ -28,8 +28,8 @@ async function request<T>(
     } catch {
       // Response is not JSON — likely an HTML proxy error (backend unreachable)
       msg = raw.length > 0
-        ? `Backend error (${res.status}) — is the API server running on port 8000?`
-        : `HTTP ${res.status} — no response body`
+        ? `Backend error (${res.status}): is the API server running on port 8000?`
+        : `HTTP ${res.status}: no response body`
     }
     console.error('API error', res.status, path, msg)
     throw new Error(msg)
@@ -254,6 +254,7 @@ export interface CompiledRule {
   older_than_days: number | null
   larger_than_mb: number | null
   preview: string
+  corrected_input?: string | null
 }
 
 export async function apiGetRules(): Promise<Rule[]> {
@@ -358,6 +359,95 @@ export interface InsightsData {
 
 export async function apiGetInsights(): Promise<InsightsData> {
   return request<InsightsData>('/api/v1/insights')
+}
+
+// ─── Search ───────────────────────────────────────────────────────────────────
+
+export interface SearchFile {
+  name: string
+  suggested_name: string
+  category: string
+  target_folder: string
+  size_bytes: number
+}
+
+export interface SearchFolder {
+  path: string
+  file_count: number
+}
+
+export interface SearchResponse {
+  files: SearchFile[]
+  folders: SearchFolder[]
+}
+
+export async function apiSearch(q: string): Promise<SearchResponse> {
+  return request<SearchResponse>(`/api/v1/search?q=${encodeURIComponent(q)}`)
+}
+
+// ─── Journal ──────────────────────────────────────────────────────────────────
+
+export interface ApiBatch {
+  id: string
+  label: string
+  folder_path: string
+  op_count: number
+  status: string
+  created_at: string
+}
+
+export interface ApiFileOp {
+  id: string
+  file_name: string
+  from_location: string
+  to_location: string
+  op_type: string
+  skipped: boolean
+  created_at: string
+}
+
+export interface ApiUndoResult {
+  batch_id: string
+  undo_batch_id: string
+  reversed: number
+  skipped: number
+  status: string
+}
+
+export interface ApiArchivedFile {
+  op_id: string
+  file_name: string
+  original_path: string
+  archive_path: string
+  archived_at: string
+}
+
+export async function apiGetBatches(): Promise<ApiBatch[]> {
+  return request<ApiBatch[]>('/api/v1/batches')
+}
+
+export async function apiGetBatchOps(batchId: string): Promise<ApiFileOp[]> {
+  return request<ApiFileOp[]>(`/api/v1/batches/${batchId}/ops`)
+}
+
+export async function apiUndoBatch(batchId: string): Promise<ApiUndoResult> {
+  return request<ApiUndoResult>(`/api/v1/batches/${batchId}/undo`, { method: 'POST' })
+}
+
+export async function apiGetArchive(): Promise<ApiArchivedFile[]> {
+  return request<ApiArchivedFile[]>('/api/v1/archive')
+}
+
+export async function apiRestoreFile(opId: string): Promise<void> {
+  return request(`/api/v1/archive/${opId}/restore`, { method: 'POST' })
+}
+
+export async function apiUndoSingleOp(opId: string): Promise<void> {
+  return request(`/api/v1/file_ops/${opId}/undo`, { method: 'POST' })
+}
+
+export async function apiDeleteArchivedFile(opId: string): Promise<void> {
+  return request(`/api/v1/archive/${opId}`, { method: 'DELETE' })
 }
 
 // ─── Explain ──────────────────────────────────────────────────────────────────
