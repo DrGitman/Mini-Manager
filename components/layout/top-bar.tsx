@@ -26,6 +26,7 @@ const titles: Record<string, string> = {
   '/settings':      'Settings',
   '/profile':       'Profile',
   '/upgrade':       'Upgrade',
+  '/agent':         'Agent',
 }
 
 function getTitle(pathname: string): string {

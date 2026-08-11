@@ -108,13 +108,20 @@ export interface AgentMessage {
 
 export interface AgentStep {
   label: string
-  status: 'pending' | 'running' | 'done'
+  status: 'pending' | 'active' | 'done' | 'failed' | 'skipped'
+  detail?: string
+}
+
+export interface AgentQuestion {
+  question: string
+  options: string[]
+  type: 'single_select' | 'multi_select'
 }
 
 export async function apiAgent(
   messages: { role: string; content: string }[],
   folderContext?: string,
-): Promise<{ reply: string; steps?: AgentStep[]; needs_clarification?: boolean; questions?: string[] }> {
+): Promise<{ reply: string; steps?: AgentStep[]; needs_clarification?: boolean; questions?: AgentQuestion[] }> {
   return request('/api/v1/agent', {
     method: 'POST',
     body: JSON.stringify({ messages, folder_context: folderContext }),

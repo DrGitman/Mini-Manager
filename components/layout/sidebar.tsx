@@ -13,7 +13,6 @@ import {
   Lock,
   LogOut,
   FolderOpen,
-  Bot,
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { signOut } from '@/lib/session'
@@ -45,7 +44,6 @@ export function Sidebar({ user, unreadCount = 0 }: SidebarProps) {
 
   const mainItems: NavItem[] = [
     { label: 'Organize', href: '/organize', icon: Sparkles },
-    { label: 'Agent', href: '/agent', icon: Bot },
     { label: 'Insights', href: '/insights', icon: BarChart2, pro: true },
     { label: 'Safety', href: '/safety', icon: ShieldCheck, pro: true },
   ]
