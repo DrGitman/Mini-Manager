@@ -18,15 +18,19 @@ import { getDemoScansUsed, DEMO_LIMIT } from '@/lib/demo'
 import type { DemoUser } from '@/lib/types'
 
 const titles: Record<string, string> = {
-  '/overview':      'Overview',
-  '/organize':      'Organize Files',
-  '/insights':      'Insights',
-  '/safety':        'Safety',
-  '/notifications': 'Notifications',
-  '/settings':      'Settings',
-  '/profile':       'Profile',
-  '/upgrade':       'Upgrade',
-  '/agent':         'Agent',
+  '/overview':    'Overview',
+  '/organize':    'Organize Files',
+  '/rules':       'Rules',
+  '/insights':    'Insights',
+  '/documents':   'Documents',
+  '/explain':     'Documents',
+  '/history':     'History',
+  '/quarantine':  'Quarantine',
+  '/notifications':'Notifications',
+  '/settings':    'Settings',
+  '/profile':     'Profile',
+  '/upgrade':     'Upgrade',
+  '/agent':       'Agent',
 }
 
 function getTitle(pathname: string): string {
@@ -66,9 +70,9 @@ export function TopBar({ unreadCount, user, aiOpen, onAiToggle }: TopBarProps) {
   }
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-4 border-b border-gray-100 bg-white px-6">
+    <header className="flex h-14 shrink-0 items-center gap-4 border-b border-border bg-card px-6">
       {/* Page title */}
-      <h1 className="text-base font-semibold text-gray-800 shrink-0">{title}</h1>
+      <h1 className="text-base font-semibold text-foreground shrink-0">{title}</h1>
 
       {/* Demo badge */}
       <div className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
@@ -83,10 +87,10 @@ export function TopBar({ unreadCount, user, aiOpen, onAiToggle }: TopBarProps) {
       {/* Search */}
       <div className="flex flex-1 justify-center">
         <div className="relative w-60">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-gray-400" />
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search files..."
-            className="h-8 rounded-lg border border-gray-200 bg-gray-50 pl-8 text-sm focus-visible:ring-1"
+            className="h-8 rounded-lg border border-border bg-muted/40 pl-8 text-sm focus-visible:ring-1"
           />
         </div>
       </div>
@@ -100,7 +104,7 @@ export function TopBar({ unreadCount, user, aiOpen, onAiToggle }: TopBarProps) {
           className={`flex size-8 items-center justify-center rounded-lg transition-colors ${
             aiOpen
               ? 'bg-primary text-white'
-              : 'text-gray-400 hover:bg-gray-100 hover:text-primary'
+              : 'text-muted-foreground hover:bg-accent hover:text-primary'
           }`}
         >
           <Sparkles className="size-4" />
@@ -109,7 +113,7 @@ export function TopBar({ unreadCount, user, aiOpen, onAiToggle }: TopBarProps) {
         {/* Notifications */}
         <Link
           href="/notifications"
-          className="relative flex size-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+          className="relative flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           <Bell className="size-4" />
           {unreadCount > 0 && (
@@ -130,8 +134,8 @@ export function TopBar({ unreadCount, user, aiOpen, onAiToggle }: TopBarProps) {
           </DropdownMenuTrigger>
           <DropdownMenuContent side="bottom" align="end" className="w-48">
             <div className="px-2 py-1.5">
-              <p className="text-sm font-medium text-gray-800 truncate">{name}</p>
-              <p className="text-xs text-gray-400 truncate">{email}</p>
+              <p className="text-sm font-medium text-foreground truncate">{name}</p>
+              <p className="text-xs text-muted-foreground truncate">{email}</p>
             </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="flex items-center gap-2 cursor-pointer" onClick={() => router.push('/profile')}>
@@ -141,7 +145,7 @@ export function TopBar({ unreadCount, user, aiOpen, onAiToggle }: TopBarProps) {
               <Settings className="size-4" /> Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" className="flex items-center gap-2 cursor-pointer" onClick={handleSignOut}>
+            <DropdownMenuItem className="flex items-center gap-2 cursor-pointer text-muted-foreground" onClick={handleSignOut}>
               <LogOut className="size-4" /> Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>

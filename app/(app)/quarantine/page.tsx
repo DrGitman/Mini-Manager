@@ -1,229 +1,157 @@
 'use client'
 
 import { useState } from 'react'
-import { Shield, Trash2, RotateCcw, Recycle, FileText, FileImage, FileArchive, File } from 'lucide-react'
+import { ShieldCheck, Trash2, RotateCcw, FolderOpen, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from '@/components/ui/card'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { Separator } from '@/components/ui/separator'
-
-// ---------------------------------------------------------------------------
-// Types & demo data
-// ---------------------------------------------------------------------------
 
 interface QuarantinedFile {
   id: string
+  originalPath: string
   name: string
   size: string
-  date: string
-  group: string
+  quarantinedAt: string
+  reason: string
+  category: 'low-confidence' | 'duplicate' | 'stale' | 'rule'
 }
 
 const INITIAL_FILES: QuarantinedFile[] = [
-  { id: 'q1', name: 'duplicate_invoice.pdf',       size: '245 KB',  date: 'Aug 5',  group: '2026-08-05' },
-  { id: 'q2', name: 'IMG_duplicate.jpg',            size: '3.4 MB',  date: 'Aug 5',  group: '2026-08-05' },
-  { id: 'q3', name: 'old-backup-copy.zip',          size: '820 MB',  date: 'Aug 3',  group: '2026-08-03' },
-  { id: 'q4', name: 'screenshot_old.png',           size: '890 KB',  date: 'Aug 3',  group: '2026-08-03' },
-  { id: 'q5', name: 'untitled document (1).docx',  size: '15 KB',   date: 'Aug 3',  group: '2026-08-03' },
+  { id: 'q1', originalPath: '~/Downloads/IMG_4821-copy.HEIC',          name: 'IMG_4821-copy.HEIC',          size: '2.9 MB',  quarantinedAt: 'Aug 5, 2026',  reason: 'Detected as duplicate of IMG_4821.HEIC',                 category: 'duplicate'      },
+  { id: 'q2', originalPath: '~/Desktop/resume_v7_FINAL_final.docx',    name: 'resume_v7_FINAL_final.docx',  size: '44 KB',   quarantinedAt: 'Aug 5, 2026',  reason: 'Low AI confidence — kept for manual review',             category: 'low-confidence' },
+  { id: 'q3', originalPath: '~/Downloads/old-backup.zip',              name: 'old-backup.zip',              size: '800 MB',  quarantinedAt: 'Aug 3, 2026',  reason: 'Unchanged for 300+ days, flagged by stale-file rule',    category: 'stale'          },
+  { id: 'q4', originalPath: '~/Documents/invoice_march_final (2).pdf', name: 'invoice_march_final (2).pdf', size: '245 KB',  quarantinedAt: 'Aug 3, 2026',  reason: 'Duplicate of invoice_march_final.pdf',                   category: 'duplicate'      },
+  { id: 'q5', originalPath: '~/Desktop/Screenshot 2024-11-02.png',     name: 'Screenshot 2024-11-02.png',   size: '1.1 MB',  quarantinedAt: 'Jul 30, 2026', reason: 'Matched rule: "Move old screenshots older than 90 days"', category: 'rule'           },
+  { id: 'q6', originalPath: '~/Downloads/temp_data_export.csv',        name: 'temp_data_export.csv',        size: '3.2 MB',  quarantinedAt: 'Jul 25, 2026', reason: 'Matched rule: "Quarantine unnamed temp files"',          category: 'rule'           },
 ]
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function fileIcon(name: string) {
-  const ext = name.split('.').pop()?.toLowerCase()
-  if (['pdf', 'doc', 'docx', 'txt'].includes(ext ?? '')) return FileText
-  if (['jpg', 'jpeg', 'png', 'heic', 'gif', 'webp'].includes(ext ?? '')) return FileImage
-  if (['zip', 'rar', '7z', 'tar'].includes(ext ?? '')) return FileArchive
-  return File
+const CAT: Record<QuarantinedFile['category'], { label: string; cls: string }> = {
+  'low-confidence': { label: 'Low confidence', cls: 'bg-amber-100 text-amber-700 border-0 hover:bg-amber-100'   },
+  'duplicate':      { label: 'Duplicate',      cls: 'bg-blue-100 text-blue-700 border-0 hover:bg-blue-100'      },
+  'stale':          { label: 'Stale',           cls: 'bg-orange-100 text-orange-700 border-0 hover:bg-orange-100'},
+  'rule':           { label: 'Rule match',      cls: 'bg-purple-100 text-purple-700 border-0 hover:bg-purple-100'},
 }
-
-function groupLabel(group: string) {
-  if (group === '2026-08-05') return 'August 5, 2026'
-  if (group === '2026-08-03') return 'August 3, 2026'
-  return group
-}
-
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
 
 export default function QuarantinePage() {
-  const [files, setFiles]         = useState<QuarantinedFile[]>(INITIAL_FILES)
-  const [toastMsg, setToastMsg]   = useState<string | null>(null)
-  const [restoringId, setRestoringId] = useState<string | null>(null)
-
-  function showToast(msg: string) {
-    setToastMsg(msg)
-    setTimeout(() => setToastMsg(null), 2500)
-  }
+  const [files, setFiles] = useState<QuarantinedFile[]>(INITIAL_FILES)
+  const [query, setQuery] = useState('')
+  const [restoredIds, setRestoredIds] = useState<Set<string>>(new Set())
 
   function handleRestore(id: string) {
-    const file = files.find((f) => f.id === id)
-    setRestoringId(id)
+    setRestoredIds(prev => new Set([...prev, id]))
     setTimeout(() => {
-      setFiles((prev) => prev.filter((f) => f.id !== id))
-      setRestoringId(null)
-      showToast(`"${file?.name}" restored successfully.`)
-    }, 600)
+      setFiles(prev => prev.filter(f => f.id !== id))
+      setRestoredIds(prev => { const n = new Set(prev); n.delete(id); return n })
+    }, 700)
   }
 
-  function handleDeletePermanently(id: string) {
-    setFiles((prev) => prev.filter((f) => f.id !== id))
+  function handleDelete(id: string) {
+    setFiles(prev => prev.filter(f => f.id !== id))
   }
 
-  const groups = [...new Set(files.map((f) => f.group))]
+  const filtered = query.trim()
+    ? files.filter(f =>
+        f.name.toLowerCase().includes(query.toLowerCase()) ||
+        f.reason.toLowerCase().includes(query.toLowerCase())
+      )
+    : files
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Quarantine</h1>
-        <p className="text-muted-foreground mt-1">
-          Files here are safe. Nothing is ever permanently deleted. Restore anytime.
-        </p>
-      </div>
-
-      {/* Info banner */}
-      <div className="flex items-start gap-3 bg-muted rounded-lg p-3">
-        <Shield className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-        <p className="text-sm text-muted-foreground">
-          Quarantine is at{' '}
-          <span className="font-mono text-foreground">C:\Users\[name]\MiniManager\Quarantine</span>.
-          Files are automatically removed after 30 days unless restored.
-        </p>
-      </div>
-
-      {/* Toast */}
-      {toastMsg && (
-        <div className="fixed bottom-6 right-6 z-50 bg-foreground text-background text-sm px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2">
-          <RotateCcw className="h-4 w-4" />
-          {toastMsg}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Quarantine</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Files moved here instead of deleted. Restore or permanently remove them.
+          </p>
         </div>
-      )}
+        <div className="text-right shrink-0">
+          <p className="text-2xl font-bold text-foreground">{files.length}</p>
+          <p className="text-xs text-muted-foreground">files quarantined</p>
+        </div>
+      </div>
 
-      {/* Files card */}
+      <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground shadow-sm">
+        <ShieldCheck className="h-4 w-4 shrink-0 text-primary" />
+        <span>
+          Mini Manager <strong className="text-foreground">never deletes</strong> files automatically. Anything moved here can be restored. Files are kept for <strong className="text-foreground">30 days</strong> before expiry.
+        </span>
+      </div>
+
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input placeholder="Search quarantined files…" value={query} onChange={e => setQuery(e.target.value)} className="pl-9" />
+      </div>
+
       <Card className="bg-card border border-border rounded-lg shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold">Quarantined Files</CardTitle>
-          <CardDescription>
-            {files.length} file{files.length !== 1 ? 's' : ''} in quarantine
+          <CardDescription className="text-sm text-muted-foreground mt-0.5">
+            {filtered.length} {filtered.length === 1 ? 'file' : 'files'}{query && ` matching "${query}"`}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          {files.length === 0 ? (
-            /* Empty state */
-            <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
-              <Recycle className="h-10 w-10" />
-              <p className="text-sm font-medium">Quarantine is empty — everything&apos;s been restored or cleared.</p>
+          {filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+              <ShieldCheck className="h-10 w-10 text-muted-foreground/30" />
+              <p className="text-sm text-muted-foreground">
+                {query ? 'No files match your search.' : 'Quarantine is empty.'}
+              </p>
             </div>
           ) : (
-            groups.map((group, gi) => (
-              <div key={group}>
-                {gi > 0 && <Separator />}
-                {/* Group header */}
-                <div className="px-6 py-2 bg-muted/40">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    {groupLabel(group)}
-                    <span className="ml-2 font-normal normal-case">
-                      ({files.filter((f) => f.group === group).length} files)
-                    </span>
-                  </p>
-                </div>
-                <ul className="divide-y divide-border">
-                  {files
-                    .filter((f) => f.group === group)
-                    .map((file) => {
-                      const Icon = fileIcon(file.name)
-                      const isRestoring = restoringId === file.id
-                      return (
-                        <li
-                          key={file.id}
-                          className={`flex items-center gap-4 px-6 py-3 transition-all ${
-                            isRestoring ? 'opacity-40' : 'opacity-100'
-                          }`}
-                        >
-                          {/* Icon */}
-                          <Icon className="h-5 w-5 text-muted-foreground shrink-0" />
-
-                          {/* Name + meta */}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {file.size} · Quarantined {file.date}
-                            </p>
-                          </div>
-
-                          {/* Actions */}
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={isRestoring}
-                              onClick={() => handleRestore(file.id)}
-                              className="gap-1.5"
-                            >
-                              <RotateCcw className="h-3.5 w-3.5" />
-                              Restore
-                            </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger
-                                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium text-destructive transition-colors hover:bg-accent hover:text-destructive focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                              >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                  Delete permanently
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete permanently?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    <span className="font-medium text-foreground">{file.name}</span> will be
-                                    permanently deleted. This cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleDeletePermanently(file.id)}
-                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                  >
-                                    Delete permanently
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </li>
-                      )
-                    })}
-                </ul>
-              </div>
-            ))
+            <ul className="divide-y divide-border">
+              {filtered.map(file => {
+                const cfg = CAT[file.category]
+                const restoring = restoredIds.has(file.id)
+                return (
+                  <li key={file.id} className={`flex items-start gap-4 px-6 py-4 transition-all ${restoring ? 'opacity-40' : 'opacity-100'}`}>
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
+                      <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
+                        <Badge className={`shrink-0 text-[10px] ${cfg.cls}`}>{cfg.label}</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">{file.originalPath}</p>
+                      <p className="text-xs text-muted-foreground/70 mt-0.5">{file.reason}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{file.size} · {file.quarantinedAt}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Button size="sm" variant="outline" disabled={restoring} onClick={() => handleRestore(file.id)} className="gap-1.5">
+                        <RotateCcw className="size-3.5" />
+                        Restore
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Permanently delete?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              <strong>{file.name}</strong> will be deleted forever. This cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(file.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete permanently</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
           )}
         </CardContent>
       </Card>
-
-      {/* Auto-cleanup notice */}
-      <p className="text-xs text-muted-foreground text-center">
-        Files older than 30 days are automatically removed. Next cleanup: Aug 25, 2026.
-      </p>
     </div>
   )
 }

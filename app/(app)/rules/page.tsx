@@ -1,284 +1,216 @@
 'use client'
 
-import { useState } from 'react'
-import { Plus, Pencil, Trash2, CheckCircle2, Info } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Plus, Trash2, CheckCircle2, Info, Loader2, FolderOpen, Tag, Clock, HardDrive } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import type { OrganizeRule } from '@/lib/types'
+import {
+  apiGetRules, apiCreateRule, apiToggleRule, apiDeleteRule, apiCompileRule,
+  type Rule, type CompiledRule,
+} from '@/lib/api'
 
-// ---------------------------------------------------------------------------
-// Demo data
-// ---------------------------------------------------------------------------
-
-const INITIAL_RULES: OrganizeRule[] = [
-  {
-    id: 'r1',
-    naturalText: 'Put all invoices and receipts in Documents/Finance',
-    match: { extensions: ['.pdf'], nameContains: ['invoice', 'receipt'] },
-    action: { targetFolder: 'Documents/Finance' },
-    enabled: true,
-    createdAt: Date.now() - 1000 * 60 * 60 * 24 * 5,
-  },
-  {
-    id: 'r2',
-    naturalText: 'Move screenshots older than 30 days to Images/Old Screenshots',
-    match: { nameContains: ['screenshot', 'screen shot'], olderThanDays: 30 },
-    action: { targetFolder: 'Images/Old Screenshots' },
-    enabled: true,
-    createdAt: Date.now() - 1000 * 60 * 60 * 24 * 3,
-  },
-  {
-    id: 'r3',
-    naturalText: 'Archive ZIP and RAR files larger than 100MB to Archives/Large',
-    match: { extensions: ['.zip', '.rar'], largerThanMB: 100 },
-    action: { targetFolder: 'Archives/Large' },
-    enabled: false,
-    createdAt: Date.now() - 1000 * 60 * 60 * 24 * 2,
-  },
-  {
-    id: 'r4',
-    naturalText: 'Keep cover letters and resumes in Documents/Career',
-    match: { nameContains: ['resume', 'cv', 'cover letter', 'cover_letter'] },
-    action: { targetFolder: 'Documents/Career' },
-    enabled: true,
-    createdAt: Date.now() - 1000 * 60 * 60 * 24,
-  },
-]
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function buildSummary(rule: OrganizeRule): string {
+function buildSummary(rule: Rule | CompiledRule): string {
   const parts: string[] = []
-  if (rule.match.extensions?.length) {
-    parts.push(`${rule.match.extensions.join(', ')} files`)
-  }
-  if (rule.match.nameContains?.length) {
-    parts.push(`with '${rule.match.nameContains.join("' or '")}' in name`)
-  }
-  if (rule.match.olderThanDays) {
-    parts.push(`older than ${rule.match.olderThanDays} days`)
-  }
-  if (rule.match.largerThanMB) {
-    parts.push(`larger than ${rule.match.largerThanMB} MB`)
-  }
-  const matchStr = parts.length ? `Matches: ${parts.join(', ')}` : 'Matches: all files'
-  return `${matchStr} → ${rule.action.targetFolder}`
+  if (rule.match_extensions.length) parts.push(rule.match_extensions.join(', ') + ' files')
+  if (rule.match_name_contains.length) parts.push(`name contains "${rule.match_name_contains.join('", "')}"`)
+  if (rule.older_than_days) parts.push(`older than ${rule.older_than_days} days`)
+  if (rule.larger_than_mb) parts.push(`larger than ${rule.larger_than_mb} MB`)
+  const match = parts.length ? parts.join(' · ') : 'all files'
+  return `${match} → ${rule.target_folder}`
 }
 
-let nextId = 5
-
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
-
 export default function RulesPage() {
-  const [rules, setRules] = useState<OrganizeRule[]>(INITIAL_RULES)
+  const [rules, setRules] = useState<Rule[]>([])
+  const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [draftText, setDraftText] = useState('')
   const [compiling, setCompiling] = useState(false)
-  const [compiled, setCompiled] = useState<OrganizeRule | null>(null)
+  const [compiled, setCompiled] = useState<CompiledRule | null>(null)
+  const [compileError, setCompileError] = useState<string | null>(null)
+  const [addingRule, setAddingRule] = useState(false)
 
-  function toggleRule(id: string) {
-    setRules((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r)),
-    )
+  useEffect(() => {
+    apiGetRules().then(setRules).catch(() => {}).finally(() => setLoading(false))
+  }, [])
+
+  async function handleToggle(id: string) {
+    setRules(prev => prev.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r))
+    try {
+      const updated = await apiToggleRule(id)
+      setRules(prev => prev.map(r => r.id === id ? updated : r))
+    } catch {
+      setRules(prev => prev.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r))
+    }
   }
 
-  function deleteRule(id: string) {
-    setRules((prev) => prev.filter((r) => r.id !== id))
+  async function handleDelete(id: string) {
+    setRules(prev => prev.filter(r => r.id !== id))
+    await apiDeleteRule(id).catch(() => {})
   }
 
   async function handleCompile() {
     if (!draftText.trim()) return
     setCompiling(true)
     setCompiled(null)
-    await new Promise((res) => setTimeout(res, 800))
-    const newRule: OrganizeRule = {
-      id: `r${nextId++}`,
-      naturalText: draftText.trim(),
-      match: { nameContains: ['document'] },
-      action: { targetFolder: 'Documents/General' },
-      enabled: true,
-      createdAt: Date.now(),
+    setCompileError(null)
+    try {
+      setCompiled(await apiCompileRule(draftText.trim()))
+    } catch (e: unknown) {
+      setCompileError(e instanceof Error ? e.message : 'Failed to compile rule')
+    } finally {
+      setCompiling(false)
     }
-    setCompiled(newRule)
-    setCompiling(false)
   }
 
-  function handleAddCompiled() {
+  async function handleAddRule() {
     if (!compiled) return
-    setRules((prev) => [...prev, compiled])
-    setCompiled(null)
-    setDraftText('')
-    setShowAdd(false)
+    setAddingRule(true)
+    try {
+      const newRule = await apiCreateRule({
+        natural_text: draftText.trim(),
+        target_folder: compiled.target_folder,
+        match_extensions: compiled.match_extensions,
+        match_name_contains: compiled.match_name_contains,
+        older_than_days: compiled.older_than_days,
+        larger_than_mb: compiled.larger_than_mb,
+      })
+      setRules(prev => [newRule, ...prev])
+      setDraftText('')
+      setCompiled(null)
+      setShowAdd(false)
+    } catch (e: unknown) {
+      setCompileError(e instanceof Error ? e.message : 'Failed to save rule')
+    } finally {
+      setAddingRule(false)
+    }
   }
 
   function handleCancel() {
     setShowAdd(false)
     setDraftText('')
     setCompiled(null)
+    setCompileError(null)
   }
+
+  const enabledCount = rules.filter(r => r.enabled).length
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Page header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">Rules</h1>
-        <p className="text-muted-foreground mt-1">
-          Write rules in plain English. Mini Manager will follow them every time.
+        <p className="text-muted-foreground mt-1 text-sm">
+          Write rules in plain English — Mini Manager follows them on every scan.
         </p>
       </div>
 
-      {/* Active Rules card */}
       <Card className="bg-card border border-border rounded-lg shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between pb-4">
           <div>
             <CardTitle className="text-base font-semibold">Active Rules</CardTitle>
             <CardDescription className="text-sm text-muted-foreground mt-0.5">
-              {rules.filter((r) => r.enabled).length} of {rules.length} rules enabled
+              {loading ? 'Loading…' : `${enabledCount} of ${rules.length} rules enabled`}
             </CardDescription>
           </div>
-          <Button size="sm" onClick={() => setShowAdd(true)} className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            Add Rule
+          <Button size="sm" onClick={() => setShowAdd(true)} disabled={showAdd} className="gap-1.5">
+            <Plus className="h-4 w-4" /> Add Rule
           </Button>
         </CardHeader>
+
         <CardContent className="p-0">
-          {rules.length === 0 ? (
-            <div className="px-6 py-10 text-center text-muted-foreground text-sm">
-              No rules yet. Add your first rule above.
+          {loading ? (
+            <div className="flex flex-col divide-y divide-border">
+              {[1,2,3].map(i => (
+                <div key={i} className="flex items-center gap-4 px-6 py-4">
+                  <div className="h-5 w-9 animate-pulse rounded-full bg-muted" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
+                    <div className="h-3 w-1/2 animate-pulse rounded bg-muted" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : rules.length === 0 && !showAdd ? (
+            <div className="px-6 py-12 text-center">
+              <p className="text-sm text-muted-foreground">No rules yet. Add your first rule above.</p>
             </div>
           ) : (
             <ul className="divide-y divide-border">
-              {rules.map((rule) => (
-                <li
-                  key={rule.id}
-                  className={`flex items-start gap-4 px-6 py-4 transition-opacity ${
-                    rule.enabled ? 'opacity-100' : 'opacity-60'
-                  }`}
-                >
-                  {/* Toggle */}
+              {rules.map(rule => (
+                <li key={rule.id} className={`flex items-start gap-4 px-6 py-4 transition-opacity ${rule.enabled ? 'opacity-100' : 'opacity-50'}`}>
                   <div className="pt-0.5 shrink-0">
-                    <Switch
-                      checked={rule.enabled}
-                      onCheckedChange={() => toggleRule(rule.id)}
-                    />
+                    <Switch checked={rule.enabled} onCheckedChange={() => handleToggle(rule.id)} />
                   </div>
-
-                  {/* Text */}
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm text-foreground leading-snug">
-                      {rule.naturalText}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {buildSummary(rule)}
-                    </p>
+                    <p className="font-medium text-sm text-foreground leading-snug">{rule.natural_text}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{buildSummary(rule)}</p>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {rule.match_extensions.map(ext => <Badge key={ext} variant="secondary" className="text-[10px] font-mono">{ext}</Badge>)}
+                      {rule.match_name_contains.map(kw => <Badge key={kw} variant="outline" className="text-[10px]">{kw}</Badge>)}
+                    </div>
                   </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                      <Pencil className="h-3.5 w-3.5" />
-                      <span className="sr-only">Edit</span>
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md p-0 text-sm font-medium text-destructive transition-colors hover:bg-accent hover:text-destructive focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        <span className="sr-only">Delete</span>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete rule?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This rule will be removed permanently and Mini Manager will stop following it.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => deleteRule(rule.id)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
+                  <AlertDialog>
+                    <AlertDialogTrigger className="shrink-0 flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete rule?</AlertDialogTitle>
+                        <AlertDialogDescription>This rule will be permanently removed.</AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDelete(rule.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </li>
               ))}
             </ul>
           )}
 
-          {/* Add Rule inline form */}
           {showAdd && (
             <>
               <Separator />
               <div className="px-6 py-5 flex flex-col gap-4">
-                <p className="text-sm font-medium text-foreground">Describe your new rule</p>
+                <p className="text-sm font-medium text-foreground">Describe your rule in plain English</p>
                 <Textarea
                   rows={3}
-                  placeholder="Describe your rule in plain English..."
+                  placeholder='e.g. "Move all invoices and receipts to Documents/Finance"'
                   value={draftText}
-                  onChange={(e) => setDraftText(e.target.value)}
+                  onChange={e => setDraftText(e.target.value)}
                   className="resize-none"
+                  autoFocus
                 />
                 <div className="flex gap-2">
-                  <Button
-                    onClick={handleCompile}
-                    disabled={compiling || !draftText.trim()}
-                  >
-                    {compiling ? 'Compiling...' : 'Compile with AI →'}
+                  <Button onClick={handleCompile} disabled={compiling || !draftText.trim()}>
+                    {compiling ? <><Loader2 className="mr-2 size-4 animate-spin" />Compiling…</> : 'Compile with AI →'}
                   </Button>
-                  <Button variant="outline" onClick={handleCancel}>
-                    Cancel
-                  </Button>
+                  <Button variant="outline" onClick={handleCancel}>Cancel</Button>
                 </div>
-
-                {/* Compiled preview */}
+                {compileError && <p className="text-sm text-destructive">{compileError}</p>}
                 {compiled && (
-                  <div className="rounded-lg border border-green-200 bg-green-50 p-4 flex flex-col gap-2">
+                  <div className="rounded-lg border border-border bg-muted/30 p-4 flex flex-col gap-3">
                     <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                      <Badge className="bg-green-100 text-green-700 border-0 hover:bg-green-100">
-                        Rule compiled
-                      </Badge>
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      <span className="text-sm font-medium text-foreground">Rule parsed</span>
                     </div>
-                    <div className="text-sm text-foreground">
-                      <span className="text-muted-foreground">Target folder: </span>
-                      <span className="font-medium">{compiled.action.targetFolder}</span>
+                    <p className="text-sm text-muted-foreground">{compiled.preview}</p>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="flex items-center gap-1.5 text-muted-foreground"><FolderOpen className="size-3.5 shrink-0" /><span className="font-mono font-medium text-foreground">{compiled.target_folder}</span></div>
+                      {compiled.match_extensions.length > 0 && <div className="flex items-center gap-1.5 text-muted-foreground"><Tag className="size-3.5 shrink-0" /><span>{compiled.match_extensions.join(', ')}</span></div>}
+                      {compiled.older_than_days && <div className="flex items-center gap-1.5 text-muted-foreground"><Clock className="size-3.5 shrink-0" /><span>Older than {compiled.older_than_days} days</span></div>}
+                      {compiled.larger_than_mb && <div className="flex items-center gap-1.5 text-muted-foreground"><HardDrive className="size-3.5 shrink-0" /><span>Larger than {compiled.larger_than_mb} MB</span></div>}
                     </div>
-                    <div className="text-sm text-foreground">
-                      <span className="text-muted-foreground">Match: </span>
-                      <span className="font-medium">{buildSummary(compiled)}</span>
-                    </div>
-                    <Button size="sm" className="mt-1 w-fit" onClick={handleAddCompiled}>
-                      Add to rules
+                    <Button size="sm" className="w-fit" onClick={handleAddRule} disabled={addingRule}>
+                      {addingRule ? <><Loader2 className="mr-2 size-4 animate-spin" />Saving…</> : 'Add to rules'}
                     </Button>
                   </div>
                 )}
@@ -288,12 +220,11 @@ export default function RulesPage() {
         </CardContent>
       </Card>
 
-      {/* Info card */}
       <Card className="bg-card border border-border rounded-lg shadow-sm">
         <CardContent className="flex items-start gap-3 pt-5 pb-5">
           <Info className="h-4 w-4 text-primary mt-0.5 shrink-0" />
           <p className="text-sm text-muted-foreground">
-            Rules run before AI classification. High-priority rules always win.
+            Rules run before AI classification — they always take priority. Toggle a rule off to pause it without deleting it.
           </p>
         </CardContent>
       </Card>

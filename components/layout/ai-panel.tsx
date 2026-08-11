@@ -75,7 +75,7 @@ function MessageBody({ text, inBubble = false }: { text: string; inBubble?: bool
     <>
       {parts.map((part, i) =>
         isPathToken(part) ? (
-          <code key={i} className={cn('rounded px-1.5 py-0.5 font-mono text-[13px] break-all', inBubble ? 'bg-white/15' : 'bg-gray-100 text-gray-700')}>
+          <code key={i} className={cn('rounded px-1.5 py-0.5 font-mono text-[13px] break-all', inBubble ? 'bg-white/15' : 'bg-muted text-muted-foreground')}>
             {part}
           </code>
         ) : <span key={i}>{part}</span>
@@ -117,7 +117,7 @@ function StatusPill({ status }: { status: MsgStatus }) {
 function IconBtn({ label, onClick, children }: { label: string; onClick?: () => void; children: ReactNode }) {
   return (
     <button type="button" title={label} aria-label={label} onClick={onClick}
-      className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+      className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
       {children}
     </button>
   )
@@ -159,7 +159,7 @@ function StepIndicator({ state }: { state: StepState }) {
     </span>
   )
   // pending / skipped
-  return <span className={cn(base, 'border-[1.5px] border-gray-200')} />
+  return <span className={cn(base, 'border-[1.5px] border-border')} />
 }
 
 function StepTracker({ steps: rawSteps }: { steps: AgentStep[] }) {
@@ -216,17 +216,17 @@ function StepTracker({ steps: rawSteps }: { steps: AgentStep[] }) {
   if (!animated.length) return null
 
   return (
-    <div className="mt-3 overflow-hidden rounded-xl border border-gray-200/80 bg-white">
+    <div className="mt-3 overflow-hidden rounded-xl border border-border bg-card">
       <button type="button" onClick={() => setOpen(v => !v)}
-        className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left transition hover:bg-gray-50 focus:outline-none">
+        className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left transition hover:bg-accent focus:outline-none">
         {/* star mark */}
         <svg viewBox="0 0 24 24" className="size-3.5 shrink-0 text-primary" fill="currentColor" aria-hidden>
           <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6L12 3z" />
         </svg>
-        <span className={cn('min-w-0 flex-1 truncate text-sm', settled ? 'text-gray-500' : 'font-medium text-gray-800')}>
+        <span className={cn('min-w-0 flex-1 truncate text-sm', settled ? 'text-muted-foreground' : 'font-medium text-foreground')}>
           {summary}
         </span>
-        <ChevronDown className={cn('size-4 shrink-0 text-gray-400 transition-transform duration-200', open ? '' : '-rotate-90')} />
+        <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform duration-200', open ? '' : '-rotate-90')} />
       </button>
 
       {/* Animate to content height with grid-rows trick */}
@@ -240,14 +240,14 @@ function StepTracker({ steps: rawSteps }: { steps: AgentStep[] }) {
                   <span className="mt-0.5"><StepIndicator state={step.state} /></span>
                   <div className="min-w-0">
                     <p className={cn('text-sm leading-snug',
-                      muted ? 'text-gray-400'
-                      : step.state === 'active' ? 'font-medium text-gray-900'
+                      muted ? 'text-muted-foreground/50'
+                      : step.state === 'active' ? 'font-medium text-foreground'
                       : step.state === 'failed' ? 'text-rose-600'
-                      : 'text-gray-800')}>
+                      : 'text-foreground')}>
                       {step.label}
                     </p>
                     {step.detail && (
-                      <p className={cn('mt-0.5 text-[13px] leading-snug', muted ? 'text-gray-300' : 'text-gray-500')}>
+                      <p className={cn('mt-0.5 text-[13px] leading-snug', muted ? 'text-muted-foreground/30' : 'text-muted-foreground')}>
                         {step.detail}
                       </p>
                     )}
@@ -464,12 +464,12 @@ function AssistantMessage({ msg, onRetry }: {
       <AgentMark />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-sm font-semibold text-gray-900 shrink-0">Mini Manager</span>
+          <span className="text-sm font-semibold text-foreground shrink-0">Mini Manager</span>
           {msg.status && <StatusPill status={msg.status} />}
-          <span className="ml-auto text-xs tabular-nums text-gray-400 shrink-0">{timeAgo(msg.ts)}</span>
+          <span className="ml-auto text-xs tabular-nums text-muted-foreground shrink-0">{timeAgo(msg.ts)}</span>
         </div>
         {msg.text && (
-          <p className="mt-2 whitespace-pre-wrap text-[15px] leading-[1.65] text-gray-700 break-words [overflow-wrap:anywhere]">
+          <p className="mt-2 whitespace-pre-wrap text-[15px] leading-[1.65] text-foreground break-words [overflow-wrap:anywhere]">
             <MessageBody text={msg.text} />
           </p>
         )}
@@ -481,7 +481,7 @@ function AssistantMessage({ msg, onRetry }: {
             <IconBtn label={copied ? 'Copied' : 'Copy'} onClick={copy}><Copy className="size-4" /></IconBtn>
             <IconBtn label="Good response"><ThumbsUp className="size-4" /></IconBtn>
             <button type="button" onClick={() => onRetry(msg.id)}
-              className="ml-1 flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+              className="ml-1 flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
               <RotateCcw className="size-3.5" />
               Retry
             </button>
@@ -498,7 +498,7 @@ function ThinkingMessage() {
       <AgentMark />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-gray-900">Mini Manager</span>
+          <span className="text-sm font-semibold text-foreground">Mini Manager</span>
           <StatusPill status="working" />
         </div>
         <div className="mt-2"><BouncingDots /></div>
@@ -515,34 +515,34 @@ function HistoryPanel({ sessions, activeId, onSelect, onNew, onDelete, onClose }
   onDelete: (id: string) => void; onClose: () => void
 }) {
   return (
-    <div className="absolute inset-0 z-10 flex flex-col bg-white">
-      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-gray-100 px-4">
-        <Clock className="size-4 text-gray-400" />
-        <span className="flex-1 text-sm font-semibold text-gray-900">Chat history</span>
-        <button onClick={onClose} className="flex size-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
+    <div className="absolute inset-0 z-10 flex flex-col bg-background">
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
+        <Clock className="size-4 text-muted-foreground" />
+        <span className="flex-1 text-sm font-semibold text-foreground">Chat history</span>
+        <button onClick={onClose} className="flex size-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent transition-colors">
           <X className="size-4" />
         </button>
       </div>
       <div className="p-3">
-        <button onClick={onNew} className="flex w-full items-center gap-2 rounded-xl border border-dashed border-gray-200 px-3 py-2.5 text-sm text-gray-500 hover:border-primary/40 hover:bg-primary/5 hover:text-primary transition-colors">
+        <button onClick={onNew} className="flex w-full items-center gap-2 rounded-xl border border-dashed border-border px-3 py-2.5 text-sm text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-primary transition-colors">
           <Plus className="size-4" /> New session
         </button>
       </div>
       <div className="flex-1 overflow-y-auto px-3 pb-3">
         {sessions.length === 0 ? (
-          <p className="text-center text-xs text-gray-400 py-8">No previous sessions</p>
+          <p className="text-center text-xs text-muted-foreground py-8">No previous sessions</p>
         ) : (
           <div className="flex flex-col gap-1">
             {sessions.map(s => (
               <div key={s.id} onClick={() => onSelect(s)}
                 className={cn('group flex items-start gap-2 rounded-xl px-3 py-2.5 cursor-pointer transition-colors',
-                  s.id === activeId ? 'bg-primary/8' : 'hover:bg-gray-50')}>
+                  s.id === activeId ? 'bg-primary/8' : 'hover:bg-accent')}>
                 <div className="flex-1 min-w-0">
-                  <p className={cn('text-xs font-medium truncate', s.id === activeId ? 'text-primary' : 'text-gray-700')}>{s.title}</p>
-                  <p className="text-[10px] text-gray-400 mt-0.5">{timeAgo(s.createdAt)}</p>
+                  <p className={cn('text-xs font-medium truncate', s.id === activeId ? 'text-primary' : 'text-foreground')}>{s.title}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{timeAgo(s.createdAt)}</p>
                 </div>
                 <button onClick={e => { e.stopPropagation(); onDelete(s.id) }}
-                  className="shrink-0 size-6 flex items-center justify-center rounded-lg text-gray-300 opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-50 transition-all">
+                  className="shrink-0 size-6 flex items-center justify-center rounded-lg text-muted-foreground/30 opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-50 transition-all">
                   <Trash2 className="size-3" />
                 </button>
               </div>
@@ -729,27 +729,27 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
   const isEmpty = messages.length === 0
 
   return (
-    <aside className="relative flex h-full w-[34rem] flex-col bg-white border-l border-gray-100 shadow-xl overflow-hidden font-sans antialiased">
+    <aside className="relative flex h-full w-[34rem] flex-col bg-background border-l border-border shadow-xl overflow-hidden font-sans antialiased">
 
       {showHistory && (
         <HistoryPanel sessions={sessions} activeId={activeId} onSelect={selectSession} onNew={newSession} onDelete={deleteSession} onClose={() => setShowHistory(false)} />
       )}
 
       {/* Header */}
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-gray-100 px-4">
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
         <AgentMark />
         <div className="flex-1 min-w-0">
-          <h2 className="text-sm font-semibold text-gray-900">Mini Manager AI</h2>
-          <p className="text-xs text-gray-400">File organisation assistant{palette ? ` · ${palette.questions.length} open question${palette.questions.length > 1 ? 's' : ''}` : ''}</p>
+          <h2 className="text-sm font-semibold text-foreground">Mini Manager AI</h2>
+          <p className="text-xs text-muted-foreground">File organisation assistant{palette ? ` · ${palette.questions.length} open question${palette.questions.length > 1 ? 's' : ''}` : ''}</p>
         </div>
         <div className="flex items-center gap-0.5">
-          <button onClick={() => setShowHistory(v => !v)} title="History" className="flex size-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
+          <button onClick={() => setShowHistory(v => !v)} title="History" className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent transition-colors">
             <Clock className="size-4" />
           </button>
-          <button onClick={newSession} title="New chat" className="flex size-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
+          <button onClick={newSession} title="New chat" className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent transition-colors">
             <Plus className="size-4" />
           </button>
-          <button onClick={onClose} className="flex size-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
+          <button onClick={onClose} className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent transition-colors">
             <X className="size-4" />
           </button>
         </div>
@@ -765,13 +765,13 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
                 <Sparkles className="size-7 text-primary" />
               </div>
               <div>
-                <p className="text-base font-semibold text-gray-900">How can I help?</p>
-                <p className="text-sm text-gray-400 mt-1">Ask me to organise, rename, or sort your files.</p>
+                <p className="text-base font-semibold text-foreground">How can I help?</p>
+                <p className="text-sm text-muted-foreground mt-1">Ask me to organise, rename, or sort your files.</p>
               </div>
               <div className="flex flex-col gap-2 w-full text-left">
                 {SUGGESTIONS.map(s => (
                   <button key={s} onClick={() => sendMessage(s)}
-                    className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-[14px] text-gray-600 text-left hover:border-primary/40 hover:text-primary transition-all">
+                    className="rounded-xl border border-border bg-card px-4 py-3 text-[14px] text-muted-foreground text-left hover:border-primary/40 hover:text-primary transition-all">
                     {s}
                   </button>
                 ))}
@@ -801,10 +801,10 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
       )}
 
       {/* Composer */}
-      <div className="shrink-0 border-t border-gray-100 bg-white/80 px-4 py-4 backdrop-blur">
+      <div className="shrink-0 border-t border-border bg-background/80 px-4 py-4 backdrop-blur">
         <div className={cn(
-          'flex items-end gap-2 rounded-2xl bg-gray-50 p-2 ring-1 transition-all',
-          listening ? 'ring-red-300 ring-2' : 'ring-gray-200 focus-within:ring-2 focus-within:ring-primary/40'
+          'flex items-end gap-2 rounded-2xl bg-muted/40 p-2 ring-1 transition-all',
+          listening ? 'ring-red-300 ring-2' : 'ring-border focus-within:ring-2 focus-within:ring-primary/40'
         )}>
           {listening && (
             <div className="flex items-center gap-1.5 px-2 py-1 self-center">
@@ -819,28 +819,28 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={palette ? 'Or reply directly…' : 'Ask anything, or describe a task…'}
-            className="max-h-[200px] flex-1 resize-none bg-transparent px-2 py-1.5 text-[15px] leading-relaxed text-gray-900 placeholder:text-gray-400 focus:outline-none"
+            className="max-h-[200px] flex-1 resize-none bg-transparent px-2 py-1.5 text-[15px] leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none"
           />
           <div className="flex items-center gap-1 shrink-0">
             {voiceSupported && (
               <button onClick={() => listening ? stopListening() : startListening()}
                 className={cn('flex size-9 items-center justify-center rounded-xl transition-colors',
-                  listening ? 'bg-red-500 text-white' : 'text-gray-400 hover:bg-gray-200 hover:text-gray-600')}>
+                  listening ? 'bg-red-500 text-white' : 'text-muted-foreground hover:bg-accent hover:text-foreground')}>
                 {listening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
               </button>
             )}
             <button onClick={() => sendMessage()} disabled={!input.trim() || thinking}
-              className="flex size-9 items-center justify-center rounded-xl bg-primary text-white disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 hover:bg-primary/90 transition-all">
+              className="flex size-9 items-center justify-center rounded-xl bg-primary text-white disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground hover:bg-primary/90 transition-all">
               <SendHorizonal className="size-4" />
             </button>
           </div>
         </div>
         {palette ? (
-          <p className="mt-2 text-center text-xs text-gray-400">
+          <p className="mt-2 text-center text-xs text-muted-foreground">
             <kbd className="font-sans">↑</kbd> <kbd className="font-sans">↓</kbd> navigate · <kbd className="font-sans">Enter</kbd> select · number keys jump
           </p>
         ) : (
-          <p className="mt-2 text-center text-xs text-gray-400">Enter to send · Shift+Enter for new line</p>
+          <p className="mt-2 text-center text-xs text-muted-foreground">Enter to send · Shift+Enter for new line</p>
         )}
       </div>
     </aside>

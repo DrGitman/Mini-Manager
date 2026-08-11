@@ -19,20 +19,20 @@ import { apiClassify, apiSaveScan } from '@/lib/api'
 import type { ClassificationResult } from '@/lib/api'
 
 function confidenceColor(c: number) {
-  if (c >= 0.85) return 'bg-green-50 text-green-700 border-green-200'
-  if (c >= 0.7)  return 'bg-yellow-50 text-yellow-700 border-yellow-200'
-  return 'bg-red-50 text-red-700 border-red-200'
+  if (c >= 0.85) return 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-400 dark:border-green-800/50'
+  if (c >= 0.7)  return 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950/40 dark:text-yellow-400 dark:border-yellow-800/50'
+  return 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800/50'
 }
 
 function sourceBadge(source: Proposal['source']) {
-  if (source === 'ai')   return <Badge className="bg-indigo-50 text-indigo-600 border-indigo-200 border text-[10px] h-4 px-1.5">AI</Badge>
-  if (source === 'rule') return <Badge className="bg-purple-50 text-purple-600 border-purple-200 border text-[10px] h-4 px-1.5">Rule</Badge>
-  return <Badge className="bg-gray-100 text-gray-500 border text-[10px] h-4 px-1.5">Auto</Badge>
+  if (source === 'ai')   return <Badge className="bg-indigo-50 text-indigo-600 border-indigo-200 border text-[10px] h-4 px-1.5 dark:bg-indigo-950/40 dark:text-indigo-400 dark:border-indigo-800/50">AI</Badge>
+  if (source === 'rule') return <Badge className="bg-purple-50 text-purple-600 border-purple-200 border text-[10px] h-4 px-1.5 dark:bg-purple-950/40 dark:text-purple-400 dark:border-purple-800/50">Rule</Badge>
+  return <Badge className="bg-muted text-muted-foreground border text-[10px] h-4 px-1.5">Auto</Badge>
 }
 
 function extBadge(ext: string) {
   return (
-    <span className="rounded px-1.5 py-0.5 text-[10px] font-mono font-medium bg-gray-100 text-gray-500 uppercase">
+    <span className="rounded px-1.5 py-0.5 text-[10px] font-mono font-medium bg-muted text-muted-foreground uppercase">
       {ext.replace('.', '') || '?'}
     </span>
   )
@@ -55,32 +55,32 @@ function FileTable({ proposals, selected, onToggle, onToggleAll, folderName }: F
   if (proposals.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-14 text-center">
-        <CheckSquare className="mb-3 size-8 text-gray-300" />
-        <p className="text-sm text-gray-400">No files in this category</p>
+        <CheckSquare className="mb-3 size-8 text-muted-foreground/40" />
+        <p className="text-sm text-muted-foreground">No files in this category</p>
       </div>
     )
   }
 
   return (
     <TooltipProvider>
-      <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-card">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100 bg-gray-50/60">
+            <tr className="border-b border-border bg-muted/40">
               <th className="w-10 px-3 py-3 text-left">
                 <Checkbox
                   checked={allChecked}
                   onCheckedChange={() => onToggleAll(ids)}
                 />
               </th>
-              <th className="px-3 py-3 text-left text-xs font-medium text-gray-400">File</th>
-              <th className="px-3 py-3 text-left text-xs font-medium text-gray-400">Current</th>
+              <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground">File</th>
+              <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground">Current</th>
               <th className="w-6 px-1" />
-              <th className="px-3 py-3 text-left text-xs font-medium text-gray-400">Proposed name</th>
-              <th className="px-3 py-3 text-left text-xs font-medium text-gray-400">Target folder</th>
-              <th className="px-3 py-3 text-center text-xs font-medium text-gray-400">Confidence</th>
-              <th className="px-3 py-3 text-center text-xs font-medium text-gray-400">Reason</th>
-              <th className="px-3 py-3 text-center text-xs font-medium text-gray-400">Source</th>
+              <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground">Proposed name</th>
+              <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground">Target folder</th>
+              <th className="px-3 py-3 text-center text-xs font-medium text-muted-foreground">Confidence</th>
+              <th className="px-3 py-3 text-center text-xs font-medium text-muted-foreground">Reason</th>
+              <th className="px-3 py-3 text-center text-xs font-medium text-muted-foreground">Source</th>
             </tr>
           </thead>
           <tbody>
@@ -88,8 +88,8 @@ function FileTable({ proposals, selected, onToggle, onToggleAll, folderName }: F
               <tr
                 key={p.id}
                 className={cn(
-                  'border-b border-gray-50 last:border-0 transition-colors hover:bg-gray-50',
-                  selected.has(p.id) && 'bg-primary/4',
+                  'border-b border-border/50 last:border-0 transition-colors hover:bg-muted/30',
+                  selected.has(p.id) && 'bg-primary/5',
                 )}
               >
                 <td className="px-3 py-2.5">
@@ -98,15 +98,15 @@ function FileTable({ proposals, selected, onToggle, onToggleAll, folderName }: F
                 <td className="px-3 py-2.5">
                   <div className="flex items-center gap-1.5">
                     {extBadge(p.file.extension)}
-                    <span className="truncate max-w-[150px] text-gray-600 text-xs" title={p.file.name}>{p.file.name}</span>
+                    <span className="truncate max-w-[150px] text-muted-foreground text-xs" title={p.file.name}>{p.file.name}</span>
                   </div>
                 </td>
-                <td className="px-3 py-2.5 text-xs text-gray-400 max-w-[100px] truncate">{folderName}/</td>
-                <td className="px-1 text-gray-300"><ArrowRight className="size-3.5 shrink-0" /></td>
+                <td className="px-3 py-2.5 text-xs text-muted-foreground max-w-[100px] truncate">{folderName}/</td>
+                <td className="px-1 text-muted-foreground/40"><ArrowRight className="size-3.5 shrink-0" /></td>
                 <td className="px-3 py-2.5">
-                  <span className="font-mono text-xs font-semibold text-gray-800 truncate max-w-[150px] block" title={p.newName}>{p.newName}</span>
+                  <span className="font-mono text-xs font-semibold text-foreground truncate max-w-[150px] block" title={p.newName}>{p.newName}</span>
                 </td>
-                <td className="px-3 py-2.5 text-xs text-gray-400 truncate max-w-[120px]">{p.targetFolder}</td>
+                <td className="px-3 py-2.5 text-xs text-muted-foreground truncate max-w-[120px]">{p.targetFolder}</td>
                 <td className="px-3 py-2.5 text-center">
                   <span className={cn('inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-medium tabular-nums', confidenceColor(p.confidence))}>
                     {p.confidence.toFixed(2)}
@@ -114,7 +114,7 @@ function FileTable({ proposals, selected, onToggle, onToggleAll, folderName }: F
                 </td>
                 <td className="px-3 py-2.5 text-center">
                   <Tooltip>
-                    <TooltipTrigger render={<span className="cursor-help truncate max-w-[90px] block text-xs text-gray-400 underline decoration-dotted mx-auto" />}>
+                    <TooltipTrigger render={<span className="cursor-help truncate max-w-[90px] block text-xs text-muted-foreground underline decoration-dotted mx-auto" />}>
                       {p.reason.slice(0, 20)}…
                     </TooltipTrigger>
                     <TooltipContent side="top" className="max-w-xs">{p.reason}</TooltipContent>
@@ -179,7 +179,6 @@ export default function OrganizePage() {
       return
     }
 
-    // Open real folder picker
     if (!('showDirectoryPicker' in window)) {
       toast('Your browser doesn\'t support folder picking. Please use Chrome or Edge.')
       return
@@ -189,7 +188,7 @@ export default function OrganizePage() {
     try {
       dirHandle = await (window as any).showDirectoryPicker({ mode: 'readwrite' })
     } catch {
-      return // user cancelled
+      return
     }
 
     setFolderName(dirHandle.name)
@@ -197,31 +196,19 @@ export default function OrganizePage() {
     setScanState('scanning')
     setScanProgress(10)
 
-    // Read file metadata, handles, and existing subfolders
     const realFiles: FileMeta[] = []
     const handleMap = new Map<string, FileSystemFileHandle>()
     const existingFolders: string[] = []
     try {
       for await (const [name, handle] of (dirHandle as any).entries()) {
-        if (handle.kind === 'directory') {
-          existingFolders.push(name)
-          continue
-        }
+        if (handle.kind === 'directory') { existingFolders.push(name); continue }
         if (handle.kind !== 'file') continue
         const file = await (handle as FileSystemFileHandle).getFile()
         const ext = name.includes('.') ? '.' + name.split('.').pop()!.toLowerCase() : ''
         const id = crypto.randomUUID()
-        const meta: FileMeta = {
-          id,
-          name,
-          extension: ext,
-          relativePath: name,
-          sizeBytes: file.size,
-          modifiedAt: file.lastModified,
-        }
-        realFiles.push(meta)
+        realFiles.push({ id, name, extension: ext, relativePath: name, sizeBytes: file.size, modifiedAt: file.lastModified })
         handleMap.set(id, handle as FileSystemFileHandle)
-        if (realFiles.length >= 500) break // cap at 500
+        if (realFiles.length >= 500) break
       }
     } catch {
       setScanState('idle')
@@ -235,50 +222,29 @@ export default function OrganizePage() {
       return
     }
 
-    // Store file map, handle map, and existing folders
     fileMapRef.current = new Map(realFiles.map(f => [f.id, f]))
     fileHandlesRef.current = handleMap
     existingFoldersRef.current = existingFolders
-
     setScanProgress(30)
 
-    // Animate progress while API call runs
     const steps = [45, 60, 75, 85]
     let i = 0
     const tick = () => { if (i < steps.length) { setScanProgress(steps[i++]); setTimeout(tick, 200) } }
     setTimeout(tick, 100)
 
     try {
-      const files = realFiles.map(f => ({
-        id: f.id,
-        name: f.name,
-        extension: f.extension,
-        size: f.sizeBytes,
-        modified_at: f.modifiedAt,
-      }))
-
-      const res = await apiClassify(files, existingFoldersRef.current)
+      const res = await apiClassify(
+        realFiles.map(f => ({ id: f.id, name: f.name, extension: f.extension, size: f.sizeBytes, modified_at: f.modifiedAt })),
+        existingFoldersRef.current,
+      )
       setScanProgress(100)
 
       const all: Proposal[] = res.results.map((r: ClassificationResult) => {
         const file = fileMapRef.current.get(r.id) ?? { id: r.id, name: r.id, extension: '', relativePath: '', sizeBytes: 0, modifiedAt: Date.now() }
-        const bucket: ConfidenceBucket =
-          r.confidence >= 0.85 ? 'auto' : r.confidence >= 0.7 ? 'review' : 'input'
-        return {
-          id: `p-${r.id}`,
-          file,
-          targetFolder: r.target_folder,
-          newName: r.new_name,
-          category: r.category,
-          reason: r.reason,
-          confidence: r.confidence,
-          bucket,
-          selected: false,
-          source: r.source,
-        }
+        const bucket: ConfidenceBucket = r.confidence >= 0.85 ? 'auto' : r.confidence >= 0.7 ? 'review' : 'input'
+        return { id: `p-${r.id}`, file, targetFolder: r.target_folder, newName: r.new_name, category: r.category, reason: r.reason, confidence: r.confidence, bucket, selected: false, source: r.source }
       })
 
-      // Only count as a used scan on success
       const used = incrementDemoScans()
       setScansUsed(used)
       window.dispatchEvent(new Event('mm:demo-scan'))
@@ -293,11 +259,7 @@ export default function OrganizePage() {
   }
 
   function toggleOne(id: string) {
-    setSelected(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
+    setSelected(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
   }
 
   function toggleMany(ids: string[]) {
@@ -311,10 +273,7 @@ export default function OrganizePage() {
 
   async function handleApply() {
     if (applyState !== 'idle' || selected.size === 0) return
-    if (!dirHandleRef.current) {
-      toast('No folder open. Please scan again.')
-      return
-    }
+    if (!dirHandleRef.current) { toast('No folder open. Please scan again.'); return }
 
     const count = selected.size
     setApplyState('loading')
@@ -329,27 +288,16 @@ export default function OrganizePage() {
       try {
         const fileHandle = fileHandlesRef.current.get(proposal.file.id)
         if (!fileHandle) throw new Error('No handle')
-
-        // Read original file content
         const file = await fileHandle.getFile()
         const buffer = await file.arrayBuffer()
-
-        // Navigate / create target subdirectories inside the selected folder
         const parts = proposal.targetFolder.split('/').filter(Boolean)
         let targetDir: FileSystemDirectoryHandle = dirHandleRef.current
-        for (const part of parts) {
-          targetDir = await targetDir.getDirectoryHandle(part, { create: true })
-        }
-
-        // Write new file with proposed name
+        for (const part of parts) targetDir = await targetDir.getDirectoryHandle(part, { create: true })
         const newHandle = await targetDir.getFileHandle(proposal.newName, { create: true })
         const writable = await (newHandle as any).createWritable()
         await writable.write(buffer)
         await writable.close()
-
-        // Delete original from root of selected folder
         await dirHandleRef.current.removeEntry(proposal.file.name)
-
         succeeded.push(proposal)
       } catch (err) {
         console.error('Failed to move', proposal.file.name, err)
@@ -358,21 +306,16 @@ export default function OrganizePage() {
       setApplyProgress(Math.round(((i + 1) / toApply.length) * 100))
     }
 
-    // Show success state on the button first (bar stays visible while applyState !== 'idle')
     setApplyState('success')
+    if (failed.length === 0) toast(`${succeeded.length} file${succeeded.length !== 1 ? 's' : ''} organised successfully`)
+    else toast(`${succeeded.length} organised, ${failed.length} failed`, 'error')
 
-    if (failed.length === 0) {
-      toast(`${succeeded.length} file${succeeded.length !== 1 ? 's' : ''} organised successfully`)
-    } else {
-      toast(`${succeeded.length} organised, ${failed.length} failed`, 'error')
-    }
-
-    // Save to backend (non-blocking)
     apiSaveScan(folderName, succeeded.length, succeeded.map(p => ({
-      id: p.id, newName: p.newName, targetFolder: p.targetFolder, category: p.category,
+      id: p.id, name: p.file.name, new_name: p.newName,
+      target_folder: p.targetFolder, category: p.category,
+      confidence: p.confidence, size: p.file.sizeBytes,
     }))).catch(() => {})
 
-    // Wait for user to see the ✓, then clear
     await new Promise(r => setTimeout(r, 2500))
     const succeededIds = new Set(succeeded.map(p => p.id))
     setProposals(prev => prev.filter(p => !succeededIds.has(p.id)))
@@ -385,22 +328,21 @@ export default function OrganizePage() {
 
   return (
     <div className="flex flex-col gap-5">
-
-      {/* Top action bar — only scan button when idle/scanning, apply when done */}
+      {/* Top action bar */}
       <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-400">
+        <p className="text-sm text-muted-foreground">
           {scanState === 'idle' && 'Pick a folder to scan'}
           {scanState === 'scanning' && 'Scanning your folder…'}
           {scanState === 'done' && `${proposals.length} proposals found`}
         </p>
         <div className="flex items-center gap-2">
           {scanState === 'done' && (
-            <div className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2 py-1">
-              <ArrowUpDown className="size-3 text-gray-400" />
+            <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2 py-1">
+              <ArrowUpDown className="size-3 text-muted-foreground" />
               <select
                 value={sortKey}
                 onChange={e => setSortKey(e.target.value as SortKey)}
-                className="text-xs text-gray-600 bg-transparent outline-none cursor-pointer"
+                className="text-xs text-foreground bg-transparent outline-none cursor-pointer"
               >
                 <option value="name">Name</option>
                 <option value="confidence">Confidence</option>
@@ -409,7 +351,7 @@ export default function OrganizePage() {
               </select>
               <button
                 onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
-                className="text-xs text-gray-400 hover:text-gray-700 font-medium w-6"
+                className="text-xs text-muted-foreground hover:text-foreground font-medium w-6"
               >
                 {sortDir === 'asc' ? '↑' : '↓'}
               </button>
@@ -430,10 +372,10 @@ export default function OrganizePage() {
 
       {/* Idle */}
       {scanState === 'idle' && (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white py-24 text-center">
-          <FolderSearch className="mb-4 size-10 text-gray-300 animate-float" />
-          <h3 className="text-sm font-medium text-gray-600">No folder scanned yet</h3>
-          <p className="mt-1 text-xs text-gray-400">Click Scan Folder to get started</p>
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card py-24 text-center">
+          <FolderSearch className="mb-4 size-10 text-muted-foreground/40 animate-float" />
+          <h3 className="text-sm font-medium text-foreground">No folder scanned yet</h3>
+          <p className="mt-1 text-xs text-muted-foreground">Click Scan Folder to get started</p>
           {scansUsed > 0 && (
             <p className="mt-3 text-xs text-amber-600 font-medium">
               {DEMO_LIMIT - scansUsed} demo scan{DEMO_LIMIT - scansUsed !== 1 ? 's' : ''} remaining
@@ -444,31 +386,31 @@ export default function OrganizePage() {
 
       {/* Scanning */}
       {scanState === 'scanning' && (
-        <div className="rounded-2xl border border-gray-100 bg-white p-6">
+        <div className="rounded-2xl border border-border bg-card p-6">
           <div className="mb-2 flex items-center justify-between text-sm">
-            <span className="font-medium text-gray-700">Scanning {folderName}…</span>
-            <span className="text-gray-400">{scanProgress}%</span>
+            <span className="font-medium text-foreground">Scanning {folderName}…</span>
+            <span className="text-muted-foreground">{scanProgress}%</span>
           </div>
           <Progress value={scanProgress} className="h-1.5" />
-          <p className="mt-2 text-xs text-gray-400">Analysing file names, types, and metadata…</p>
+          <p className="mt-2 text-xs text-muted-foreground">Analysing file names, types, and metadata…</p>
         </div>
       )}
 
       {/* Results */}
       {scanState === 'done' && (
         <Tabs defaultValue="auto">
-          <TabsList className="h-9 bg-gray-100/60">
+          <TabsList className="h-9 bg-muted/60">
             <TabsTrigger value="auto" className="gap-1.5 text-xs">
               Auto-apply
-              <span className="rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px] font-semibold">{byBucket.auto.length}</span>
+              <span className="rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px] font-semibold dark:bg-green-950/50 dark:text-green-400">{byBucket.auto.length}</span>
             </TabsTrigger>
             <TabsTrigger value="review" className="gap-1.5 text-xs">
               Review
-              <span className="rounded-full bg-yellow-100 text-yellow-700 px-1.5 py-0.5 text-[10px] font-semibold">{byBucket.review.length}</span>
+              <span className="rounded-full bg-yellow-100 text-yellow-700 px-1.5 py-0.5 text-[10px] font-semibold dark:bg-yellow-950/50 dark:text-yellow-400">{byBucket.review.length}</span>
             </TabsTrigger>
             <TabsTrigger value="input" className="gap-1.5 text-xs">
               Needs input
-              <span className="rounded-full bg-red-100 text-red-700 px-1.5 py-0.5 text-[10px] font-semibold">{byBucket.input.length}</span>
+              <span className="rounded-full bg-red-100 text-red-700 px-1.5 py-0.5 text-[10px] font-semibold dark:bg-red-950/50 dark:text-red-400">{byBucket.input.length}</span>
             </TabsTrigger>
           </TabsList>
 
@@ -484,35 +426,33 @@ export default function OrganizePage() {
         </Tabs>
       )}
 
-      {/* Fixed bottom bar — only when files are selected */}
+      {/* Fixed bottom bar */}
       {scanState === 'done' && (selectedCount > 0 || applyState !== 'idle') && (
         <FixedBar>
-        <div className="fixed bottom-0 left-56 right-0 z-50 flex items-center gap-3 border-t border-gray-100 bg-white/95 px-8 py-3 backdrop-blur-sm">
-          <span className="text-sm text-gray-500">
-            {selectedCount} file{selectedCount !== 1 ? 's' : ''} selected
-          </span>
-          <div className="ml-auto flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
-              Clear
-            </Button>
-            <button
-              onClick={handleApply}
-              disabled={applyState !== 'idle'}
-              className="btn-glow relative h-9 min-w-[150px] overflow-hidden rounded-lg bg-primary px-4 text-sm font-semibold text-white disabled:opacity-40"
-            >
-              {applyState === 'idle' && `Apply ${selectedCount} changes`}
-              {applyState === 'loading' && (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="text-white/80 text-xs">{applyProgress}%</span>
-                  <span className="btn-progress-bar" style={{ width: `${applyProgress}%` }} />
-                </span>
-              )}
-              {applyState === 'success' && (
-                <span className="flex items-center justify-center"><SuccessCheck size={22} /></span>
-              )}
-            </button>
+          <div className="fixed bottom-0 left-56 right-0 z-50 flex items-center gap-3 border-t border-border bg-card/95 px-8 py-3 backdrop-blur-sm">
+            <span className="text-sm text-muted-foreground">
+              {selectedCount} file{selectedCount !== 1 ? 's' : ''} selected
+            </span>
+            <div className="ml-auto flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>Clear</Button>
+              <button
+                onClick={handleApply}
+                disabled={applyState !== 'idle'}
+                className="btn-glow relative h-9 min-w-[150px] overflow-hidden rounded-lg bg-primary px-4 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                {applyState === 'idle' && `Apply ${selectedCount} changes`}
+                {applyState === 'loading' && (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="text-white/80 text-xs">{applyProgress}%</span>
+                    <span className="btn-progress-bar" style={{ width: `${applyProgress}%` }} />
+                  </span>
+                )}
+                {applyState === 'success' && (
+                  <span className="flex items-center justify-center"><SuccessCheck size={22} /></span>
+                )}
+              </button>
+            </div>
           </div>
-        </div>
         </FixedBar>
       )}
 

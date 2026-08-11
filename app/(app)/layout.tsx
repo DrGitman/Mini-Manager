@@ -9,15 +9,15 @@ import { PageTransition } from '@/components/layout/page-transition'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getSession } from '@/lib/session'
 import { PreferencesProvider } from '@/lib/preferences-context'
+import { apiGetNotifications } from '@/lib/api'
 import type { DemoUser } from '@/lib/types'
-
-const UNREAD_COUNT = 3
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const [user, setUser] = useState<DemoUser | null>(null)
   const [checking, setChecking] = useState(true)
   const [aiOpen, setAiOpen] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
     const session = getSession()
@@ -27,11 +27,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
     setUser(session)
     setChecking(false)
+
+    // Fetch real unread count
+    apiGetNotifications()
+      .then(res => setUnreadCount(res.unread_count))
+      .catch(() => {})
+
+    // Refresh badge every 60s
+    const interval = setInterval(() => {
+      apiGetNotifications()
+        .then(res => setUnreadCount(res.unread_count))
+        .catch(() => {})
+    }, 60_000)
+    return () => clearInterval(interval)
   }, [router])
 
   if (checking) {
     return (
-      <div className="flex h-screen items-center justify-center bg-white">
+      <div className="flex h-screen items-center justify-center bg-background">
         <div className="space-y-3 w-64">
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-4/5" />
@@ -43,14 +56,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <PreferencesProvider>
-    <div className="flex h-screen overflow-hidden bg-white">
+    <div className="flex h-screen overflow-hidden bg-background">
       {/* Sidebar */}
-      <Sidebar user={user} unreadCount={UNREAD_COUNT} />
+      <Sidebar user={user} unreadCount={unreadCount} />
 
       {/* Main column */}
-      <div className="flex flex-1 flex-col overflow-hidden border-l border-gray-100">
-        <TopBar unreadCount={UNREAD_COUNT} user={user} aiOpen={aiOpen} onAiToggle={() => setAiOpen(o => !o)} />
-        <main className="flex-1 overflow-y-auto bg-[#f4f6fb] p-6">
+      <div className="flex flex-1 flex-col overflow-hidden border-l border-border">
+        <TopBar unreadCount={unreadCount} user={user} aiOpen={aiOpen} onAiToggle={() => setAiOpen(o => !o)} />
+        <main className="flex-1 overflow-y-auto bg-background p-6">
           <PageTransition>{children}</PageTransition>
         </main>
       </div>

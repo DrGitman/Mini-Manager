@@ -60,7 +60,7 @@ function statusBadge(status: BatchStatus) {
   if (status === 'Applied')
     return <Badge className="bg-green-100 text-green-700 border-0 hover:bg-green-100">Applied</Badge>
   if (status === 'Undone')
-    return <Badge className="bg-gray-100 text-gray-500 border-0 hover:bg-gray-100">Undone</Badge>
+    return <Badge className="bg-muted text-muted-foreground border-0 hover:bg-muted">Undone</Badge>
   return <Badge className="bg-yellow-100 text-yellow-700 border-0 hover:bg-yellow-100">Partial</Badge>
 }
 

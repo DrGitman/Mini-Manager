@@ -95,41 +95,66 @@
 
 .dark {
   color-scheme: dark;
-  --background: oklch(0.16 0.01 260);
-  --foreground: oklch(0.96 0.005 255);
-  --card: oklch(0.21 0.012 260);
-  --card-foreground: oklch(0.96 0.005 255);
-  --popover: oklch(0.21 0.012 260);
-  --popover-foreground: oklch(0.96 0.005 255);
-  --primary: oklch(0.62 0.17 264);
+
+  /* ── Canvas layers (deep navy, matching reference design) ── */
+  /* Background: #13152a — deepest navy base */
+  --background: oklch(0.14 0.04 272);
+  --foreground: oklch(0.95 0.008 255);
+
+  /* Cards: #1c1f38 — slightly raised surface */
+  --card: oklch(0.19 0.045 270);
+  --card-foreground: oklch(0.95 0.008 255);
+
+  /* Popovers/dropdowns: match card */
+  --popover: oklch(0.19 0.045 270);
+  --popover-foreground: oklch(0.95 0.008 255);
+
+  /* ── Brand blue — stays vibrant on dark ── */
+  --primary: oklch(0.63 0.19 264);
   --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.26 0.012 260);
-  --secondary-foreground: oklch(0.96 0.005 255);
-  --muted: oklch(0.26 0.012 260);
-  --muted-foreground: oklch(0.68 0.01 260);
-  --accent: oklch(0.28 0.03 264);
-  --accent-foreground: oklch(0.8 0.1 264);
-  --destructive: oklch(0.66 0.19 25);
-  --success: oklch(0.68 0.14 155);
+
+  /* ── Secondary surfaces ── */
+  /* #252844 — input fills, secondary buttons */
+  --secondary: oklch(0.22 0.05 270);
+  --secondary-foreground: oklch(0.92 0.008 255);
+
+  /* Muted: #242742 */
+  --muted: oklch(0.22 0.048 270);
+  --muted-foreground: oklch(0.62 0.018 262);
+
+  /* Accent hover: #2d3158 */
+  --accent: oklch(0.26 0.065 268);
+  --accent-foreground: oklch(0.88 0.04 262);
+
+  /* ── Status colours ── */
+  --destructive: oklch(0.66 0.2 25);
+  --success: oklch(0.68 0.15 155);
   --success-foreground: oklch(0.15 0 0);
-  --warning: oklch(0.78 0.13 75);
+  --warning: oklch(0.78 0.14 75);
   --warning-foreground: oklch(0.2 0.05 75);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.62 0.17 264);
-  --chart-1: oklch(0.62 0.17 264);
-  --chart-2: oklch(0.78 0.13 75);
-  --chart-3: oklch(0.68 0.14 155);
-  --chart-4: oklch(0.65 0.16 300);
-  --chart-5: oklch(0.68 0.15 20);
-  --sidebar: oklch(0.19 0.012 260);
-  --sidebar-foreground: oklch(0.9 0.005 255);
-  --sidebar-primary: oklch(0.62 0.17 264);
+
+  /* ── Strokes & inputs ── */
+  /* Very subtle — navy border, barely visible */
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.63 0.19 264);
+
+  /* ── Charts ── */
+  --chart-1: oklch(0.63 0.19 264);
+  --chart-2: oklch(0.78 0.14 75);
+  --chart-3: oklch(0.68 0.15 155);
+  --chart-4: oklch(0.65 0.17 300);
+  --chart-5: oklch(0.68 0.16 20);
+
+  /* ── Sidebar: #181b36 — slightly different from bg ── */
+  --sidebar: oklch(0.165 0.042 271);
+  --sidebar-foreground: oklch(0.88 0.01 258);
+  --sidebar-primary: oklch(0.63 0.19 264);
   --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.28 0.03 264);
-  --sidebar-accent-foreground: oklch(0.8 0.1 264);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.62 0.17 264);
+  --sidebar-accent: oklch(0.26 0.065 268);
+  --sidebar-accent-foreground: oklch(0.88 0.04 262);
+  --sidebar-border: oklch(1 0 0 / 6%);
+  --sidebar-ring: oklch(0.63 0.19 264);
 }
 
 @layer base {
@@ -370,6 +395,25 @@ input:focus-visible, textarea:focus-visible {
   transform: translateY(1px);
 }
 
+
+/* ── Theme switch: circle-reveal via View Transitions API ── */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root) {
+    animation: none;
+  }
+  ::view-transition-new(root) {
+    animation: theme-reveal 480ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  @keyframes theme-reveal {
+    from { clip-path: circle(0px at var(--theme-x, 50%) var(--theme-y, 0%)); }
+    to   { clip-path: circle(200vmax at var(--theme-x, 50%) var(--theme-y, 0%)); }
+  }
+}
+
+/* Soft fallback fade for browsers without View Transitions support */
+html {
+  transition: background-color 220ms ease, color 220ms ease;
+}
 
 /* ── Responsive: hide AI panel on smaller screens ────────── */
 @media (max-width: 1280px) {

@@ -2,32 +2,23 @@
 
 import { useEffect, useState } from 'react'
 import {
-  Settings2,
-  Shield,
-  Bell,
-  CreditCard,
-  FolderPlus,
+  Settings2, Shield, Bell, CreditCard, FolderPlus, X, Loader2, CheckCircle2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-} from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { getSession } from '@/lib/session'
-import { DEFAULT_PREFERENCES, type UserPreferences } from '@/lib/types'
+import { apiGetPreferences, apiSavePreferences, type Preferences } from '@/lib/api'
+import { usePreferences } from '@/lib/preferences-context'
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const BLOCKED_PATHS = [
   'C:\\Windows',
@@ -39,44 +30,116 @@ const BLOCKED_PATHS = [
 
 const PROTECTED_EXTENSIONS = ['.exe', '.dll', '.sys', '.msi', '.bat', '.cmd']
 
+const DEFAULT_PREFS: Preferences = {
+  naming_style: 'title',
+  categories: ['Documents', 'Images', 'Videos', 'Audio', 'Code', 'Archives'],
+  target_folder: 'Desktop',
+  quarantine_mode: 'auto',
+  naming_convention: 'date-subject',
+  auto_threshold: 0.85,
+  review_threshold: 0.70,
+  monitor_downloads: true,
+  monitor_desktop: false,
+  monitor_documents: false,
+  custom_folders: [],
+  notif_scan: true,
+  notif_apply: true,
+  notif_digest: false,
+  notif_tips: true,
+  notif_marketing: false,
+  theme: 'light',
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function SettingsPage() {
+  const { setPrefs: setContextPrefs } = usePreferences()
   const [userName, setUserName] = useState('User')
-  const [prefs, setPrefs] = useState<UserPreferences>(DEFAULT_PREFERENCES)
+  const [plan, setPlan] = useState<'free' | 'pro'>('free')
 
-  // Scan scope
-  const [monitorDownloads, setMonitorDownloads] = useState(true)
-  const [monitorDesktop, setMonitorDesktop] = useState(true)
-  const [monitorDocuments, setMonitorDocuments] = useState(false)
-  const [showCustomFolder, setShowCustomFolder] = useState(false)
-  const [customFolder, setCustomFolder] = useState('')
-
-  // Notifications
-  const [notifScanComplete, setNotifScanComplete] = useState(true)
-  const [notifBatchApplied, setNotifBatchApplied] = useState(true)
-  const [notifWeeklyDigest, setNotifWeeklyDigest] = useState(false)
-  const [notifAiTips, setNotifAiTips] = useState(true)
-  const [notifMarketing, setNotifMarketing] = useState(false)
-
-  // License
-  const [licenseKey, setLicenseKey] = useState('')
-
-  // Toast
+  const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFS)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Custom folder input state
+  const [showFolderInput, setShowFolderInput] = useState(false)
+  const [folderInput, setFolderInput] = useState('')
+
+  // License key input
+  const [licenseKey, setLicenseKey] = useState('')
 
   useEffect(() => {
     const session = getSession()
     if (session) {
       setUserName(session.name)
+      setPlan(session.plan ?? 'free')
     }
+
+    apiGetPreferences()
+      .then(p => setPrefs(p))
+      .catch(() => {/* use defaults */})
+      .finally(() => setLoading(false))
   }, [])
 
-  function setPref<K extends keyof UserPreferences>(key: K, value: UserPreferences[K]) {
-    setPrefs((prev) => ({ ...prev, [key]: value }))
+  function update<K extends keyof Preferences>(key: K, value: Preferences[K]) {
+    setPrefs(prev => ({ ...prev, [key]: value }))
   }
 
-  function handleSave() {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+  function handleThemeChange(theme: string) {
+    update('theme', theme)
+    // Expand from center of screen (no button origin here)
+    document.documentElement.style.setProperty('--theme-x', '50%')
+    document.documentElement.style.setProperty('--theme-y', '50%')
+    const doSwitch = () => {
+      if (theme === 'dark') document.documentElement.classList.add('dark')
+      else document.documentElement.classList.remove('dark')
+    }
+    if ('startViewTransition' in document) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(document as any).startViewTransition(doSwitch)
+    } else {
+      doSwitch()
+    }
+  }
+
+  function addCustomFolder() {
+    const trimmed = folderInput.trim()
+    if (!trimmed) return
+    if (!prefs.custom_folders.includes(trimmed)) {
+      update('custom_folders', [...prefs.custom_folders, trimmed])
+    }
+    setFolderInput('')
+    setShowFolderInput(false)
+  }
+
+  function removeCustomFolder(folder: string) {
+    update('custom_folders', prefs.custom_folders.filter(f => f !== folder))
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    setError(null)
+    try {
+      const saved = await apiSavePreferences(prefs)
+      setPrefs(saved)
+      setContextPrefs(saved)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to save preferences')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    )
   }
 
   return (
@@ -89,7 +152,7 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      {/* Section 1: Preferences */}
+      {/* ── Section 1: Preferences ── */}
       <Card className="bg-card border border-border rounded-lg shadow-sm">
         <CardHeader className="p-6 pb-0">
           <div className="flex items-center gap-2">
@@ -98,14 +161,13 @@ export default function SettingsPage() {
           </div>
         </CardHeader>
         <CardContent className="p-6 pt-4 space-y-0">
+
           {/* Naming convention */}
           <div className="flex items-center justify-between py-3">
             <Label className="text-sm font-medium text-foreground">Naming convention</Label>
             <Select
-              value={prefs.namingConvention}
-              onValueChange={(v) =>
-                setPref('namingConvention', v as UserPreferences['namingConvention'])
-              }
+              value={prefs.naming_convention}
+              onValueChange={v => update('naming_convention', v)}
             >
               <SelectTrigger className="w-72">
                 <SelectValue />
@@ -124,7 +186,7 @@ export default function SettingsPage() {
             <Label className="text-sm font-medium text-foreground">Theme</Label>
             <Select
               value={prefs.theme}
-              onValueChange={(v) => setPref('theme', v as UserPreferences['theme'])}
+              onValueChange={handleThemeChange}
             >
               <SelectTrigger className="w-72">
                 <SelectValue />
@@ -132,7 +194,6 @@ export default function SettingsPage() {
               <SelectContent>
                 <SelectItem value="light">Light</SelectItem>
                 <SelectItem value="dark">Dark</SelectItem>
-                <SelectItem value="system">System</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -142,16 +203,16 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between py-3">
             <Label className="text-sm font-medium text-foreground">Auto-apply threshold</Label>
             <Select
-              value={String(prefs.autoApplyThreshold)}
-              onValueChange={(v) => setPref('autoApplyThreshold', Number(v))}
+              value={String(prefs.auto_threshold)}
+              onValueChange={v => update('auto_threshold', Number(v))}
             >
               <SelectTrigger className="w-72">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="0.85">85% confidence (default)</SelectItem>
-                <SelectItem value="0.90">90% confidence</SelectItem>
                 <SelectItem value="0.75">75% confidence</SelectItem>
+                <SelectItem value="0.85">85% confidence (default)</SelectItem>
+                <SelectItem value="0.9">90% confidence</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -161,23 +222,23 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between py-3">
             <Label className="text-sm font-medium text-foreground">Review threshold</Label>
             <Select
-              value={String(prefs.reviewThreshold)}
-              onValueChange={(v) => setPref('reviewThreshold', Number(v))}
+              value={String(prefs.review_threshold)}
+              onValueChange={v => update('review_threshold', Number(v))}
             >
               <SelectTrigger className="w-72">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="0.70">70% confidence (default)</SelectItem>
-                <SelectItem value="0.60">60% confidence</SelectItem>
-                <SelectItem value="0.80">80% confidence</SelectItem>
+                <SelectItem value="0.6">60% confidence</SelectItem>
+                <SelectItem value="0.7">70% confidence (default)</SelectItem>
+                <SelectItem value="0.8">80% confidence</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </CardContent>
       </Card>
 
-      {/* Section 2: Scan Scope */}
+      {/* ── Section 2: Scan Scope ── */}
       <Card className="bg-card border border-border rounded-lg shadow-sm">
         <CardHeader className="p-6 pb-0">
           <div className="flex items-center gap-2">
@@ -186,6 +247,7 @@ export default function SettingsPage() {
           </div>
         </CardHeader>
         <CardContent className="p-6 pt-4 space-y-0">
+
           {/* Downloads */}
           <div className="flex items-center justify-between py-3">
             <div className="space-y-0.5">
@@ -194,7 +256,10 @@ export default function SettingsPage() {
                 C:\Users\{userName}\Downloads — Your main download location
               </p>
             </div>
-            <Switch checked={monitorDownloads} onCheckedChange={setMonitorDownloads} />
+            <Switch
+              checked={prefs.monitor_downloads}
+              onCheckedChange={v => update('monitor_downloads', v)}
+            />
           </div>
           <Separator />
 
@@ -206,7 +271,10 @@ export default function SettingsPage() {
                 C:\Users\{userName}\Desktop — Files saved to desktop
               </p>
             </div>
-            <Switch checked={monitorDesktop} onCheckedChange={setMonitorDesktop} />
+            <Switch
+              checked={prefs.monitor_desktop}
+              onCheckedChange={v => update('monitor_desktop', v)}
+            />
           </div>
           <Separator />
 
@@ -218,8 +286,38 @@ export default function SettingsPage() {
                 C:\Users\{userName}\Documents — Document library
               </p>
             </div>
-            <Switch checked={monitorDocuments} onCheckedChange={setMonitorDocuments} />
+            <Switch
+              checked={prefs.monitor_documents}
+              onCheckedChange={v => update('monitor_documents', v)}
+            />
           </div>
+
+          {/* Custom folders */}
+          {prefs.custom_folders.length > 0 && (
+            <>
+              <Separator />
+              <div className="py-3 space-y-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Custom folders</p>
+                <div className="flex flex-wrap gap-2">
+                  {prefs.custom_folders.map(folder => (
+                    <div
+                      key={folder}
+                      className="flex items-center gap-1.5 rounded-md border border-border bg-muted px-2.5 py-1 text-xs font-mono"
+                    >
+                      <span>{folder}</span>
+                      <button
+                        onClick={() => removeCustomFolder(folder)}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
           <Separator />
 
           {/* Add custom folder */}
@@ -227,20 +325,22 @@ export default function SettingsPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setShowCustomFolder((prev) => !prev)}
+              onClick={() => setShowFolderInput(prev => !prev)}
             >
               <FolderPlus className="h-4 w-4 mr-2" />
               Add custom folder
             </Button>
-            {showCustomFolder && (
+            {showFolderInput && (
               <div className="mt-3 flex gap-2">
                 <Input
                   placeholder="C:\Users\YourName\CustomFolder"
-                  value={customFolder}
-                  onChange={(e) => setCustomFolder(e.target.value)}
+                  value={folderInput}
+                  onChange={e => setFolderInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') addCustomFolder() }}
                   className="flex-1"
+                  autoFocus
                 />
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" onClick={addCustomFolder}>
                   Add
                 </Button>
               </div>
@@ -249,7 +349,7 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Section 3: Safety & Blocklist */}
+      {/* ── Section 3: Safety & Blocklist (read-only) ── */}
       <Card className="bg-card border border-border rounded-lg shadow-sm">
         <CardHeader className="p-6 pb-0">
           <div className="flex items-center gap-2">
@@ -258,43 +358,33 @@ export default function SettingsPage() {
           </div>
         </CardHeader>
         <CardContent className="p-6 pt-4 space-y-4">
-          {/* Info box */}
           <div className="flex items-start gap-3 bg-muted rounded-lg p-3">
             <Shield className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
             <p className="text-sm text-muted-foreground">
               These paths are always protected and will never be scanned or modified.
             </p>
           </div>
-
-          {/* Blocked paths */}
           <div>
             <p className="text-sm font-medium text-foreground mb-2">Protected paths</p>
             <div className="flex flex-wrap gap-2">
-              {BLOCKED_PATHS.map((path) => (
-                <Badge key={path} variant="secondary" className="font-mono text-xs">
-                  {path}
-                </Badge>
+              {BLOCKED_PATHS.map(path => (
+                <Badge key={path} variant="secondary" className="font-mono text-xs">{path}</Badge>
               ))}
             </div>
           </div>
-
           <Separator />
-
-          {/* Protected extensions */}
           <div>
             <p className="text-sm font-medium text-foreground mb-2">Protected extensions</p>
             <div className="flex flex-wrap gap-2">
-              {PROTECTED_EXTENSIONS.map((ext) => (
-                <Badge key={ext} variant="secondary" className="font-mono text-xs">
-                  {ext}
-                </Badge>
+              {PROTECTED_EXTENSIONS.map(ext => (
+                <Badge key={ext} variant="secondary" className="font-mono text-xs">{ext}</Badge>
               ))}
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Section 4: License & Subscription */}
+      {/* ── Section 4: License & Subscription ── */}
       <Card className="bg-card border border-border rounded-lg shadow-sm">
         <CardHeader className="p-6 pb-0">
           <div className="flex items-center gap-2">
@@ -303,48 +393,47 @@ export default function SettingsPage() {
           </div>
         </CardHeader>
         <CardContent className="p-6 pt-4 space-y-4">
-          {/* Current plan */}
           <div className="flex items-center justify-between py-1">
             <div className="space-y-0.5">
               <div className="flex items-center gap-2">
                 <p className="text-sm font-medium text-foreground">Current plan</p>
-                <Badge variant="secondary">Free Plan</Badge>
+                <Badge variant="secondary">{plan === 'pro' ? 'Pro Plan' : 'Free Plan'}</Badge>
               </div>
               <p className="text-xs text-muted-foreground">
-                500 files/month, 200 AI classifications
+                {plan === 'pro'
+                  ? 'Unlimited files, unlimited AI classifications'
+                  : '500 files/month, 200 AI classifications'}
               </p>
             </div>
           </div>
-
           <Separator />
-
-          {/* License key */}
           <div className="space-y-2">
             <Label className="text-sm font-medium text-foreground">License key</Label>
             <div className="flex gap-2">
               <Input
                 placeholder="MM-XXXX-XXXX-XXXX"
                 value={licenseKey}
-                onChange={(e) => setLicenseKey(e.target.value)}
+                onChange={e => setLicenseKey(e.target.value)}
                 className="flex-1 font-mono"
               />
-              <Button variant="outline">Activate</Button>
+              <Button variant="outline" disabled={!licenseKey.trim()}>Activate</Button>
             </div>
           </div>
-
           <Separator />
-
-          {/* Renewal */}
           <div className="flex items-center justify-between py-1">
-            <p className="text-sm text-muted-foreground">Free tier — no renewal required</p>
-            <a href="/upgrade" className="text-sm text-primary hover:underline font-medium">
-              Upgrade to Pro →
-            </a>
+            <p className="text-sm text-muted-foreground">
+              {plan === 'pro' ? 'Pro plan active' : 'Free tier — no renewal required'}
+            </p>
+            {plan !== 'pro' && (
+              <a href="/upgrade" className="text-sm text-primary hover:underline font-medium">
+                Upgrade to Pro →
+              </a>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Section 5: Notifications */}
+      {/* ── Section 5: Notification Preferences ── */}
       <Card className="bg-card border border-border rounded-lg shadow-sm">
         <CardHeader className="p-6 pb-0">
           <div className="flex items-center gap-2">
@@ -355,41 +444,44 @@ export default function SettingsPage() {
         <CardContent className="p-6 pt-4 space-y-0">
           <div className="flex items-center justify-between py-3">
             <Label className="text-sm font-medium text-foreground">Scan complete notifications</Label>
-            <Switch checked={notifScanComplete} onCheckedChange={setNotifScanComplete} />
+            <Switch checked={prefs.notif_scan} onCheckedChange={v => update('notif_scan', v)} />
           </div>
           <Separator />
-
           <div className="flex items-center justify-between py-3">
             <Label className="text-sm font-medium text-foreground">Batch applied notifications</Label>
-            <Switch checked={notifBatchApplied} onCheckedChange={setNotifBatchApplied} />
+            <Switch checked={prefs.notif_apply} onCheckedChange={v => update('notif_apply', v)} />
           </div>
           <Separator />
-
           <div className="flex items-center justify-between py-3">
             <Label className="text-sm font-medium text-foreground">Weekly insights digest</Label>
-            <Switch checked={notifWeeklyDigest} onCheckedChange={setNotifWeeklyDigest} />
+            <Switch checked={prefs.notif_digest} onCheckedChange={v => update('notif_digest', v)} />
           </div>
           <Separator />
-
           <div className="flex items-center justify-between py-3">
             <Label className="text-sm font-medium text-foreground">New AI tips</Label>
-            <Switch checked={notifAiTips} onCheckedChange={setNotifAiTips} />
+            <Switch checked={prefs.notif_tips} onCheckedChange={v => update('notif_tips', v)} />
           </div>
           <Separator />
-
           <div className="flex items-center justify-between py-3">
             <Label className="text-sm font-medium text-foreground">Marketing emails</Label>
-            <Switch checked={notifMarketing} onCheckedChange={setNotifMarketing} />
+            <Switch checked={prefs.notif_marketing} onCheckedChange={v => update('notif_marketing', v)} />
           </div>
         </CardContent>
       </Card>
 
-      {/* Save button */}
+      {/* ── Save button ── */}
       <div className="flex items-center gap-3 pb-6">
-        <Button onClick={handleSave} disabled={saved}>
-          {saved ? 'Saved!' : 'Save preferences'}
+        <Button onClick={handleSave} disabled={saving || saved}>
+          {saving
+            ? <><Loader2 className="mr-2 size-4 animate-spin" />Saving…</>
+            : saved
+            ? <><CheckCircle2 className="mr-2 size-4" />Saved!</>
+            : 'Save preferences'}
         </Button>
-        {saved && (
+        {error && (
+          <span className="text-sm text-destructive">{error}</span>
+        )}
+        {saved && !error && (
           <span className="text-sm text-muted-foreground">Your preferences have been saved.</span>
         )}
       </div>

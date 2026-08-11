@@ -20,10 +20,19 @@ async function request<T>(
     },
   })
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: 'Unknown error' }))
-    const msg = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail)
-    console.error('API error', res.status, msg)
-    throw new Error(msg ?? `HTTP ${res.status}`)
+    const raw = await res.text().catch(() => '')
+    let msg: string
+    try {
+      const err = JSON.parse(raw)
+      msg = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail)
+    } catch {
+      // Response is not JSON — likely an HTML proxy error (backend unreachable)
+      msg = raw.length > 0
+        ? `Backend error (${res.status}) — is the API server running on port 8000?`
+        : `HTTP ${res.status} — no response body`
+    }
+    console.error('API error', res.status, path, msg)
+    throw new Error(msg)
   }
   return res.json() as Promise<T>
 }
@@ -128,15 +137,76 @@ export async function apiAgent(
   })
 }
 
-// ─── Scans ────────────────────────────────────────────────────────────────────
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+export interface ApiNotification {
+  id: string
+  kind: 'scan' | 'apply' | 'undo' | 'tip' | 'system' | 'agent'
+  title: string
+  body: string
+  read: boolean
+  created_at: string
+}
+
+export async function apiGetNotifications(): Promise<{ notifications: ApiNotification[]; unread_count: number }> {
+  return request('/api/v1/notifications')
+}
+
+export async function apiToggleRead(id: string): Promise<void> {
+  return request(`/api/v1/notifications/${id}/read`, { method: 'PATCH' })
+}
+
+export async function apiMarkAllRead(): Promise<void> {
+  return request('/api/v1/notifications/read-all', { method: 'PATCH' })
+}
+
+export async function apiDeleteNotification(id: string): Promise<void> {
+  return request(`/api/v1/notifications/${id}`, { method: 'DELETE' })
+}
+
+// ─── Stats ────────────────────────────────────────────────────────────────────
+
+export interface DashboardStats {
+  total_files_scanned: number
+  total_scans: number
+  ready_to_organise: number
+  proposals: { auto: number; review: number; manual: number }
+  recent_scans: {
+    id: string
+    folder_path: string
+    file_count: number
+    created_at: string
+    proposal_count: number
+  }[]
+  top_files: { name: string; size_bytes: number; category: string }[]
+}
+
+export async function apiGetStats(): Promise<DashboardStats> {
+  return request<DashboardStats>('/api/v1/stats')
+}
 
 // ─── Preferences ──────────────────────────────────────────────────────────────
 
 export interface Preferences {
+  // Legacy fields
   naming_style: string
   categories: string[]
   target_folder: string
   quarantine_mode: string
+  // Extended fields
+  naming_convention: string
+  auto_threshold: number
+  review_threshold: number
+  monitor_downloads: boolean
+  monitor_desktop: boolean
+  monitor_documents: boolean
+  custom_folders: string[]
+  notif_scan: boolean
+  notif_apply: boolean
+  notif_digest: boolean
+  notif_tips: boolean
+  notif_marketing: boolean
+  theme: string
 }
 
 export async function apiGetPreferences(): Promise<Preferences> {
@@ -160,5 +230,118 @@ export async function apiSaveScan(
   await request('/api/v1/scans', {
     method: 'POST',
     body: JSON.stringify({ folder_path: folderPath, file_count: fileCount, proposals }),
+  })
+}
+
+// ─── Rules ────────────────────────────────────────────────────────────────────
+
+export interface Rule {
+  id: string
+  natural_text: string
+  target_folder: string
+  match_extensions: string[]
+  match_name_contains: string[]
+  older_than_days: number | null
+  larger_than_mb: number | null
+  enabled: boolean
+  created_at: string
+}
+
+export interface CompiledRule {
+  target_folder: string
+  match_extensions: string[]
+  match_name_contains: string[]
+  older_than_days: number | null
+  larger_than_mb: number | null
+  preview: string
+}
+
+export async function apiGetRules(): Promise<Rule[]> {
+  return request<Rule[]>('/api/v1/rules')
+}
+
+export async function apiCreateRule(data: {
+  natural_text: string
+  target_folder: string
+  match_extensions: string[]
+  match_name_contains: string[]
+  older_than_days?: number | null
+  larger_than_mb?: number | null
+}): Promise<Rule> {
+  return request<Rule>('/api/v1/rules', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export async function apiToggleRule(id: string): Promise<Rule> {
+  return request<Rule>(`/api/v1/rules/${id}/toggle`, { method: 'PATCH' })
+}
+
+export async function apiDeleteRule(id: string): Promise<void> {
+  return request(`/api/v1/rules/${id}`, { method: 'DELETE' })
+}
+
+export async function apiCompileRule(text: string): Promise<CompiledRule> {
+  return request<CompiledRule>('/api/v1/rules/compile', {
+    method: 'POST',
+    body: JSON.stringify({ text }),
+  })
+}
+
+// ─── Profile ──────────────────────────────────────────────────────────────────
+
+export interface ProfileData {
+  user_id: string
+  email: string
+  name: string
+  plan: string
+}
+
+export async function apiGetProfile(): Promise<ProfileData> {
+  return request<ProfileData>('/api/v1/profile')
+}
+
+export async function apiUpdateProfile(data: {
+  name: string
+  company?: string | null
+  location?: string | null
+  bio?: string | null
+}): Promise<ProfileData> {
+  return request<ProfileData>('/api/v1/profile', {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function apiChangePassword(oldPassword: string, newPassword: string): Promise<void> {
+  return request('/api/v1/profile/password', {
+    method: 'POST',
+    body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
+  })
+}
+
+// ─── Explain ──────────────────────────────────────────────────────────────────
+
+export interface ExplainResult {
+  summary: string
+  suggested_category: string
+  suggested_name: string
+  suggested_folder: string
+  confidence: number
+  tokens_used: number
+}
+
+export async function apiExplain(
+  filename: string,
+  extension: string,
+  size: number,
+  contentPreview?: string,
+): Promise<ExplainResult> {
+  return request<ExplainResult>('/api/v1/explain', {
+    method: 'POST',
+    body: JSON.stringify({
+      filename,
+      extension,
+      size,
+      content_preview: contentPreview ?? null,
+    }),
   })
 }
