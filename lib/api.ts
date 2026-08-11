@@ -1,15 +1,66 @@
 // Empty string = same origin (proxied through Next.js rewrites in dev, direct in prod)
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? ''
 
+// ─── Token storage ────────────────────────────────────────────────────────────
+
 function getToken(): string | null {
   if (typeof window === 'undefined') return null
   return localStorage.getItem('mm.token') ?? sessionStorage.getItem('mm.token')
 }
 
+function setToken(token: string): void {
+  if (typeof window === 'undefined') return
+  // Keep in the same storage where it was originally written
+  if (localStorage.getItem('mm.token') !== null) {
+    localStorage.setItem('mm.token', token)
+  } else {
+    sessionStorage.setItem('mm.token', token)
+  }
+}
+
+// ─── Silent refresh ────────────────────────────────────────────────────────────
+// Refresh the token when it has < 30 minutes left (2-hour access tokens).
+
+function tokenExpiresAt(token: string): number | null {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : null
+  } catch {
+    return null
+  }
+}
+
+let _refreshPromise: Promise<void> | null = null
+
+async function maybeRefresh(): Promise<void> {
+  const token = getToken()
+  if (!token) return
+  const exp = tokenExpiresAt(token)
+  if (!exp) return
+  const minsLeft = (exp - Date.now()) / 60_000
+  if (minsLeft > 30) return  // plenty of time left
+
+  // Only one concurrent refresh
+  if (!_refreshPromise) {
+    _refreshPromise = fetch(`${BASE}/api/v1/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then((data: AuthResponse | null) => { if (data?.access_token) setToken(data.access_token) })
+      .catch(() => {})
+      .finally(() => { _refreshPromise = null })
+  }
+  await _refreshPromise
+}
+
+// ─── Core request helper ──────────────────────────────────────────────────────
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
+  await maybeRefresh()
   const token = getToken()
   const res = await fetch(`${BASE}${path}`, {
     ...options,
