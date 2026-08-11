@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { FolderOpen, FolderSearch, ArrowRight, CheckSquare } from 'lucide-react'
+import { FolderOpen, FolderSearch, ArrowRight, CheckSquare, ArrowUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -133,6 +133,8 @@ function FileTable({ proposals, selected, onToggle, onToggleAll, folderName }: F
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 type ScanState = 'idle' | 'scanning' | 'done'
+type SortKey = 'name' | 'confidence' | 'category' | 'size'
+type SortDir = 'asc' | 'desc'
 
 export default function OrganizePage() {
   const [scanState, setScanState] = useState<ScanState>('idle')
@@ -147,15 +149,29 @@ export default function OrganizePage() {
   const fileMapRef = useRef<Map<string, FileMeta>>(new Map())
   const fileHandlesRef = useRef<Map<string, FileSystemFileHandle>>(new Map())
   const dirHandleRef = useRef<FileSystemDirectoryHandle | null>(null)
+  const existingFoldersRef = useRef<string[]>([])
+  const [sortKey, setSortKey] = useState<SortKey>('name')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
   const { toast, ToastContainer } = useToast()
 
   useEffect(() => { setScansUsed(getDemoScansUsed()) }, [])
 
+  const sortedProposals = useMemo(() => {
+    return [...proposals].sort((a, b) => {
+      let cmp = 0
+      if (sortKey === 'name')       cmp = a.file.name.localeCompare(b.file.name)
+      else if (sortKey === 'confidence') cmp = a.confidence - b.confidence
+      else if (sortKey === 'category')   cmp = a.category.localeCompare(b.category)
+      else if (sortKey === 'size')       cmp = a.file.sizeBytes - b.file.sizeBytes
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+  }, [proposals, sortKey, sortDir])
+
   const byBucket = useMemo(() => ({
-    auto:   proposals.filter(p => p.bucket === 'auto'),
-    review: proposals.filter(p => p.bucket === 'review'),
-    input:  proposals.filter(p => p.bucket === 'input'),
-  }), [proposals])
+    auto:   sortedProposals.filter(p => p.bucket === 'auto'),
+    review: sortedProposals.filter(p => p.bucket === 'review'),
+    input:  sortedProposals.filter(p => p.bucket === 'input'),
+  }), [sortedProposals])
 
   async function handleScan() {
     if (isDemoExpired()) {
@@ -181,11 +197,16 @@ export default function OrganizePage() {
     setScanState('scanning')
     setScanProgress(10)
 
-    // Read file metadata and handles from the selected folder
+    // Read file metadata, handles, and existing subfolders
     const realFiles: FileMeta[] = []
     const handleMap = new Map<string, FileSystemFileHandle>()
+    const existingFolders: string[] = []
     try {
       for await (const [name, handle] of (dirHandle as any).entries()) {
+        if (handle.kind === 'directory') {
+          existingFolders.push(name)
+          continue
+        }
         if (handle.kind !== 'file') continue
         const file = await (handle as FileSystemFileHandle).getFile()
         const ext = name.includes('.') ? '.' + name.split('.').pop()!.toLowerCase() : ''
@@ -214,9 +235,10 @@ export default function OrganizePage() {
       return
     }
 
-    // Store file map and handle map for result lookup and apply
+    // Store file map, handle map, and existing folders
     fileMapRef.current = new Map(realFiles.map(f => [f.id, f]))
     fileHandlesRef.current = handleMap
+    existingFoldersRef.current = existingFolders
 
     setScanProgress(30)
 
@@ -235,7 +257,7 @@ export default function OrganizePage() {
         modified_at: f.modifiedAt,
       }))
 
-      const res = await apiClassify(files)
+      const res = await apiClassify(files, existingFoldersRef.current)
       setScanProgress(100)
 
       const all: Proposal[] = res.results.map((r: ClassificationResult) => {
@@ -372,6 +394,27 @@ export default function OrganizePage() {
           {scanState === 'done' && `${proposals.length} proposals found`}
         </p>
         <div className="flex items-center gap-2">
+          {scanState === 'done' && (
+            <div className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2 py-1">
+              <ArrowUpDown className="size-3 text-gray-400" />
+              <select
+                value={sortKey}
+                onChange={e => setSortKey(e.target.value as SortKey)}
+                className="text-xs text-gray-600 bg-transparent outline-none cursor-pointer"
+              >
+                <option value="name">Name</option>
+                <option value="confidence">Confidence</option>
+                <option value="category">Category</option>
+                <option value="size">Size</option>
+              </select>
+              <button
+                onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+                className="text-xs text-gray-400 hover:text-gray-700 font-medium w-6"
+              >
+                {sortDir === 'asc' ? '↑' : '↓'}
+              </button>
+            </div>
+          )}
           <Button
             onClick={handleScan}
             disabled={scanState === 'scanning'}

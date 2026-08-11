@@ -88,10 +88,36 @@ export interface ClassifyResponse {
   ai_calls: number
 }
 
-export async function apiClassify(files: FileItem[]): Promise<ClassifyResponse> {
+export async function apiClassify(
+  files: FileItem[],
+  existingFolders: string[] = [],
+): Promise<ClassifyResponse> {
   return request<ClassifyResponse>('/api/v1/classify', {
     method: 'POST',
-    body: JSON.stringify({ files }),
+    body: JSON.stringify({ files, existing_folders: existingFolders }),
+  })
+}
+
+// ─── Agent ────────────────────────────────────────────────────────────────────
+
+export interface AgentMessage {
+  role: 'user' | 'assistant'
+  content: string
+  steps?: AgentStep[]
+}
+
+export interface AgentStep {
+  label: string
+  status: 'pending' | 'running' | 'done'
+}
+
+export async function apiAgent(
+  messages: { role: string; content: string }[],
+  folderContext?: string,
+): Promise<{ reply: string; steps?: AgentStep[]; needs_clarification?: boolean; questions?: string[] }> {
+  return request('/api/v1/agent', {
+    method: 'POST',
+    body: JSON.stringify({ messages, folder_context: folderContext }),
   })
 }
 
