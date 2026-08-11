@@ -170,8 +170,8 @@ export default function OverviewPage() {
               <Link href="/insights" className={buttonVariants({ variant: 'outline', className: 'flex-1' })}>
                 View Insights
               </Link>
-              <Link href="/settings" className={buttonVariants({ variant: 'outline', className: 'flex-1' })}>
-                Settings
+              <Link href="/rules" className={buttonVariants({ variant: 'outline', className: 'flex-1' })}>
+                Rules
               </Link>
             </div>
           </CardContent>

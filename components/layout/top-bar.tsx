@@ -25,7 +25,7 @@ const titles: Record<string, string> = {
   '/documents':   'Documents',
   '/explain':     'Documents',
   '/history':     'History',
-  '/quarantine':  'Quarantine',
+  '/quarantine':  'Archive',
   '/notifications':'Notifications',
   '/settings':    'Settings',
   '/profile':     'Profile',

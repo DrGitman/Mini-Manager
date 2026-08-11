@@ -43,7 +43,7 @@ export function Sidebar({ user }: SidebarProps) {
     { label: 'Insights',   href: '/insights',    icon: BarChart2,      pro: true },
     { label: 'Documents',  href: '/documents',   icon: FileSearch      },
     { label: 'History',    href: '/history',     icon: History,        pro: true },
-    { label: 'Quarantine', href: '/quarantine',  icon: ShieldCheck,    pro: true },
+    { label: 'Archive',    href: '/quarantine',  icon: ShieldCheck,    pro: true },
   ]
 
   function handleNavClick(item: NavItem, e: React.MouseEvent) {

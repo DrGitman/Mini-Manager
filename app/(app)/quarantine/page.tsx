@@ -65,7 +65,7 @@ export default function QuarantinePage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Quarantine</h1>
+          <h1 className="text-2xl font-bold text-foreground">Archive</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Files moved here instead of deleted. Restore or permanently remove them.
           </p>
@@ -79,7 +79,7 @@ export default function QuarantinePage() {
       <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground shadow-sm">
         <ShieldCheck className="h-4 w-4 shrink-0 text-primary" />
         <span>
-          Mini Manager <strong className="text-foreground">never deletes</strong> files automatically. Anything moved here can be restored. Files are kept for <strong className="text-foreground">30 days</strong> before expiry.
+          Mini Manager <strong className="text-foreground">never deletes</strong> files automatically. Anything moved here can be restored. Files are kept for <strong className="text-foreground">30 days</strong> before permanent removal.
         </span>
       </div>
 
@@ -90,7 +90,7 @@ export default function QuarantinePage() {
 
       <Card className="bg-card border border-border rounded-lg shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold">Quarantined Files</CardTitle>
+          <CardTitle className="text-base font-semibold">Archived Files</CardTitle>
           <CardDescription className="text-sm text-muted-foreground mt-0.5">
             {filtered.length} {filtered.length === 1 ? 'file' : 'files'}{query && ` matching "${query}"`}
           </CardDescription>

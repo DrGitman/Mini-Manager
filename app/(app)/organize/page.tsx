@@ -314,6 +314,7 @@ export default function OrganizePage() {
       id: p.id, name: p.file.name, new_name: p.newName,
       target_folder: p.targetFolder, category: p.category,
       confidence: p.confidence, size: p.file.sizeBytes,
+      extension: p.file.extension, modified_at: p.file.modifiedAt,
     }))).catch(() => {})
 
     await new Promise(r => setTimeout(r, 2500))

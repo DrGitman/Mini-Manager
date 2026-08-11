@@ -329,6 +329,39 @@ export interface ExplainResult {
   tokens_used: number
 }
 
+// ─── Insights ─────────────────────────────────────────────────────────────────
+
+export interface DuplicatePair {
+  id: string
+  fileA: { name: string; size: number; ext: string; scan_date: string }
+  fileB: { name: string; size: number; ext: string; scan_date: string }
+  similarity: 'exact-size' | 'name-variant'
+}
+
+export interface StaleFile {
+  id: string
+  name: string
+  size: number
+  extension: string
+  modified_at: number
+  days_unchanged: number
+  category: string
+}
+
+export interface InsightsData {
+  duplicates: DuplicatePair[]
+  stale_files: StaleFile[]
+  total_size_bytes: number
+  duplicate_size_bytes: number
+  stale_size_bytes: number
+}
+
+export async function apiGetInsights(): Promise<InsightsData> {
+  return request<InsightsData>('/api/v1/insights')
+}
+
+// ─── Explain ──────────────────────────────────────────────────────────────────
+
 export async function apiExplain(
   filename: string,
   extension: string,
