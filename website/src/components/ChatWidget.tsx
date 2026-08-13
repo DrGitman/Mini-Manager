@@ -78,10 +78,10 @@ export default function ChatWidget() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 50, scale: 0.9 }}
             transition={{ type: "spring", bounce: 0.3 }}
-            className="fixed bottom-6 right-6 z-50 w-full max-w-[350px] sm:max-w-[400px] h-[500px] max-h-[80vh] flex flex-col bg-[#111827] rounded-2xl shadow-2xl border border-white/10 overflow-hidden"
+            className="fixed bottom-6 right-6 z-50 w-full max-w-[350px] sm:max-w-[400px] h-[500px] max-h-[80vh] flex flex-col bg-[#171c2f] rounded-2xl shadow-2xl border border-[#3c4561] overflow-hidden"
           >
             {/* Header */}
-            <div className="px-5 py-4 border-b border-white/10 bg-gradient-to-r from-[#111827] to-[#1A2333] flex items-center justify-between">
+            <div className="px-5 py-4 border-b border-[#3c4561] bg-[#0d1020] flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00E5FF] to-[#7C4DFF] flex items-center justify-center">
                   <Sparkles size={16} className="text-white" />
@@ -93,7 +93,7 @@ export default function ChatWidget() {
               </div>
               <button 
                 onClick={() => setIsOpen(false)}
-                className="text-gray-400 hover:text-white transition-colors p-1"
+                className="text-[#9198b7] hover:text-[#edeef3] transition-colors p-1"
               >
                 <X size={20} />
               </button>
@@ -108,9 +108,9 @@ export default function ChatWidget() {
                 >
                   <div 
                     className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
-                      msg.role === 'user' 
-                        ? 'bg-gradient-to-r from-[#00E5FF] to-[#7C4DFF] text-white rounded-br-sm' 
-                        : 'bg-white/10 text-gray-200 rounded-bl-sm border border-white/5'
+                      msg.role === 'user'
+                        ? 'bg-gradient-to-r from-[#00E5FF] to-[#7C4DFF] text-white rounded-br-sm'
+                        : 'bg-[#0d1020] text-[#bec2d3] rounded-bl-sm border border-[#3c4561]'
                     }`}
                   >
                     {msg.content}
@@ -119,7 +119,7 @@ export default function ChatWidget() {
               ))}
               {isLoading && (
                 <div className="flex justify-start">
-                  <div className="bg-white/10 text-gray-200 rounded-2xl rounded-bl-sm border border-white/5 px-4 py-3 flex items-center gap-2">
+                  <div className="bg-[#0d1020] text-[#bec2d3] rounded-2xl rounded-bl-sm border border-[#3c4561] px-4 py-3 flex items-center gap-2">
                     <div className="w-1.5 h-1.5 bg-[#00E5FF] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                     <div className="w-1.5 h-1.5 bg-[#00E5FF] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                     <div className="w-1.5 h-1.5 bg-[#00E5FF] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
@@ -130,22 +130,22 @@ export default function ChatWidget() {
             </div>
 
             {/* API Key Notice */}
-            <div className="px-4 py-2 bg-blue-900/20 border-t border-blue-500/30 flex items-center gap-2">
-              <AlertCircle size={14} className="text-blue-400 shrink-0" />
-              <p className="text-[10px] text-blue-300/80 leading-tight">
+            <div className="px-4 py-2 bg-[#0d1020] border-t border-[#3c4561] flex items-center gap-2">
+              <AlertCircle size={14} className="text-[#9198b7] shrink-0" />
+              <p className="text-[10px] text-[#9198b7] leading-tight">
                 Requires GEMINI_API_KEY in .env to function fully.
               </p>
             </div>
 
             {/* Input Area */}
-            <div className="p-4 bg-[#111827] border-t border-white/10">
+            <div className="p-4 bg-[#0d1020] border-t border-[#3c4561]">
               <form onSubmit={handleSend} className="flex items-center gap-2">
                 <input
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="Ask a question..."
-                  className="flex-1 bg-white/5 border border-white/10 rounded-full px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#00E5FF]/50 transition-colors"
+                  className="flex-1 bg-[#171c2f] border border-[#3c4561] rounded-full px-4 py-2.5 text-sm text-[#edeef3] focus:outline-none focus:border-[#00E5FF]/50 transition-colors placeholder-[#9198b7]"
                 />
                 <button
                   type="submit"

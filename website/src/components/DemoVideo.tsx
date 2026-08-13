@@ -12,16 +12,16 @@ export default function DemoVideo() {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-4xl md:text-5xl font-display font-bold mb-6"
+            className="text-4xl md:text-5xl font-display font-bold mb-6 text-[#edeef3]"
           >
             Watch Mini Manager <span className="text-[#00E5FF]">in Action</span>
           </motion.h2>
-          <motion.p 
+          <motion.p
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.1 }}
-            className="text-gray-400 text-lg"
+            className="text-[#9198b7] text-lg"
           >
             See how the AI-powered life assistant streamlines daily tasks in this quick walkthrough.
           </motion.p>
@@ -35,12 +35,12 @@ export default function DemoVideo() {
           className="relative max-w-5xl mx-auto"
         >
           {/* Video Placeholder */}
-          <div className="relative aspect-video rounded-3xl overflow-hidden glass-card border border-white/10 shadow-2xl group cursor-pointer">
-            <div className="absolute inset-0 bg-gradient-to-br from-[#0A0E17] to-[#111827] flex flex-col items-center justify-center">
+          <div className="relative aspect-video rounded-2xl overflow-hidden bg-[#171c2f] border border-[#3c4561] shadow-2xl group cursor-pointer hover:border-[#00E5FF]/40 transition-colors">
+            <div className="absolute inset-0 bg-[#0d1020] flex flex-col items-center justify-center">
               <div className="w-20 h-20 rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7C4DFF] flex items-center justify-center shadow-[0_0_30px_rgba(0,229,255,0.4)] group-hover:scale-110 transition-transform duration-300">
                 <Play className="text-white ml-1" size={32} fill="currentColor" />
               </div>
-              <p className="mt-6 text-gray-400 font-medium tracking-widest uppercase text-sm">Play Video</p>
+              <p className="mt-6 text-[#9198b7] font-medium tracking-widest uppercase text-sm">Play Video</p>
             </div>
             
             {/* Embedded iframe will go here later */}

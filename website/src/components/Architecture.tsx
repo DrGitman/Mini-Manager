@@ -15,13 +15,21 @@ export default function Architecture() {
 
   return (
     <section id="architecture" className="py-24 relative overflow-hidden">
-      <div className="container mx-auto px-6 md:px-12 relative z-10">
+      <div className="container mx-auto px-6 md:px-16 max-w-7xl relative z-10">
         <div className="text-center max-w-3xl mx-auto mb-16">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="inline-flex items-center px-4 py-1.5 rounded-full bg-[#171c2f] border border-[#3c4561] text-xs font-bold tracking-widest text-[#9198b7] uppercase mb-6"
+          >
+            BUILT ON
+          </motion.div>
           <motion.h2
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-4xl md:text-5xl font-display font-bold mb-6"
+            className="text-4xl md:text-5xl font-display font-bold mb-6 text-[#edeef3]"
           >
             Built on a <span className="text-[#00E5FF]">Modern Stack</span>
           </motion.h2>
@@ -30,7 +38,7 @@ export default function Architecture() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.1 }}
-            className="text-gray-400 text-lg"
+            className="text-[#9198b7] text-lg"
           >
             A lean, performant architecture pairing an Electron desktop shell with a FastAPI backend and dual AI models for fast, accurate file organization.
           </motion.p>
@@ -48,7 +56,7 @@ export default function Architecture() {
                 whileInView={{ opacity: 1, scale: 1 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.15 }}
-                className="w-24 h-24 rounded-2xl glass-card flex items-center justify-center border border-white/10 relative z-10 shadow-xl"
+                className="w-24 h-24 rounded-2xl bg-[#171c2f] border border-[#3c4561] flex items-center justify-center relative z-10 shadow-xl"
               >
                 <span className="font-display font-bold text-white">{step}</span>
               </motion.div>
@@ -64,13 +72,13 @@ export default function Architecture() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: index * 0.1 }}
-                className="bg-white/5 border border-white/5 rounded-xl p-6 hover:bg-white/10 transition-colors flex flex-col items-center text-center group"
+                className="bg-[#171c2f] border border-[#3c4561] rounded-xl p-6 hover:border-[#00E5FF]/40 hover:bg-[#1a2038] transition-all flex flex-col items-center text-center group"
               >
-                <div className="w-12 h-12 rounded-lg bg-[#0A0E17] flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <div className="w-12 h-12 rounded-lg bg-[#0d1020] flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                   {item.icon}
                 </div>
-                <h4 className="text-white font-bold mb-1">{item.name}</h4>
-                <p className="text-gray-400 text-sm">{item.desc}</p>
+                <h4 className="text-[#edeef3] font-bold mb-1">{item.name}</h4>
+                <p className="text-[#9198b7] text-sm">{item.desc}</p>
               </motion.div>
             ))}
           </div>

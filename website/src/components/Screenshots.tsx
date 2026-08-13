@@ -53,13 +53,21 @@ const screens = [
 export default function Screenshots() {
   return (
     <section className="py-24 relative overflow-hidden bg-[#05070B]">
-      <div className="container mx-auto px-6 md:px-12 relative z-10">
+      <div className="container mx-auto px-6 md:px-16 max-w-7xl relative z-10">
         <div className="text-center max-w-3xl mx-auto mb-16">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="inline-flex items-center px-4 py-1.5 rounded-full bg-[#171c2f] border border-[#3c4561] text-xs font-bold tracking-widest text-[#9198b7] uppercase mb-6"
+          >
+            EVERY SCREEN
+          </motion.div>
           <motion.h2
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-4xl md:text-5xl font-display font-bold mb-6"
+            className="text-4xl md:text-5xl font-display font-bold mb-6 text-[#edeef3]"
           >
             Every Screen <span className="text-gradient">Purpose-Built</span>
           </motion.h2>
@@ -68,7 +76,7 @@ export default function Screenshots() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.1 }}
-            className="text-gray-400 text-lg"
+            className="text-[#9198b7] text-lg"
           >
             Four focused views — no clutter, no subscriptions. Just your files, organised.
           </motion.p>
@@ -84,10 +92,10 @@ export default function Screenshots() {
               transition={{ delay: index * 0.1 }}
               className="flex flex-col gap-4 group"
             >
-              <div className="relative aspect-[9/16] rounded-2xl glass-card border border-white/10 overflow-hidden shadow-lg group-hover:-translate-y-2 transition-transform duration-300">
-                <div className="absolute inset-0 bg-[#0D111C] flex flex-col">
+              <div className="relative aspect-[9/16] rounded-2xl bg-[#171c2f] border border-[#3c4561] overflow-hidden shadow-lg group-hover:-translate-y-2 group-hover:border-[#00E5FF]/40 transition-all duration-300">
+                <div className="absolute inset-0 bg-[#0d1020] flex flex-col">
                   {/* Fake top bar */}
-                  <div className="flex items-center gap-2 px-4 py-3 border-b border-white/5">
+                  <div className="flex items-center gap-2 px-4 py-3 border-b border-[#3c4561]">
                     {screen.icon}
                     <span className="text-white text-xs font-bold">{screen.title}</span>
                   </div>
@@ -96,10 +104,10 @@ export default function Screenshots() {
                     {screen.preview.map((item, i) => (
                       <div key={i}>
                         <div className="flex justify-between mb-1">
-                          <span className="text-gray-400 text-[10px]">{item.label}</span>
+                          <span className="text-[#9198b7] text-[10px]">{item.label}</span>
                           <span className="text-[10px] font-medium" style={{ color: screen.accent }}>{item.count}</span>
                         </div>
-                        <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                        <div className="h-1.5 rounded-full bg-[#3c4561] overflow-hidden">
                           <div
                             className="h-full rounded-full"
                             style={{ width: `${item.pct}%`, background: screen.accent, opacity: 0.7 }}
@@ -120,8 +128,8 @@ export default function Screenshots() {
                 </div>
               </div>
               <div className="text-center">
-                <h3 className="text-white font-bold text-lg">{screen.title}</h3>
-                <p className="text-gray-400 text-sm">{screen.desc}</p>
+                <h3 className="text-[#edeef3] font-bold text-lg">{screen.title}</h3>
+                <p className="text-[#9198b7] text-sm">{screen.desc}</p>
               </div>
             </motion.div>
           ))}

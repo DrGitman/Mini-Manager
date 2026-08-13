@@ -62,24 +62,23 @@ export default function Support() {
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-[#7C4DFF]/5 rounded-full blur-[100px]" />
       </div>
 
-      <div className="container mx-auto px-6 md:px-12 relative z-10">
+      <div className="container mx-auto px-6 md:px-16 max-w-7xl relative z-10">
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto mb-16">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 16 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="inline-flex items-center gap-2 rounded-full border border-[#00E5FF]/30 bg-[#00E5FF]/10 px-4 py-1.5 text-sm text-[#00E5FF] mb-6"
+            className="inline-flex items-center px-4 py-1.5 rounded-full bg-[#171c2f] border border-[#3c4561] text-xs font-bold tracking-widest text-[#9198b7] uppercase mb-6"
           >
-            <MessageSquare size={14} />
-            Support
+            SUPPORT
           </motion.div>
           <motion.h2
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.1 }}
-            className="text-4xl md:text-5xl font-display font-bold mb-6"
+            className="text-4xl md:text-5xl font-display font-bold mb-6 text-[#edeef3]"
           >
             We&apos;ve got you <span className="bg-gradient-to-r from-[#00E5FF] to-[#7C4DFF] bg-clip-text text-transparent">covered</span>
           </motion.h2>
@@ -88,7 +87,7 @@ export default function Support() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.2 }}
-            className="text-gray-400 text-lg"
+            className="text-[#9198b7] text-lg"
           >
             AI-powered first-line support that resolves most issues instantly. Human backup for everything else.
           </motion.p>
@@ -103,18 +102,18 @@ export default function Support() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.1 }}
-              className="relative group rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm p-6 hover:border-white/20 transition-all"
+              className="relative group rounded-2xl border border-[#3c4561] bg-[#171c2f] p-6 hover:border-[#00E5FF]/40 hover:bg-[#1a2038] transition-all"
             >
               <div className={`inline-flex p-3 rounded-xl bg-gradient-to-br ${ch.color} mb-4`}>
                 <ch.icon size={20} className="text-white" />
               </div>
               <div className="flex items-start justify-between mb-2">
-                <h3 className="text-lg font-semibold text-white">{ch.title}</h3>
+                <h3 className="text-lg font-semibold text-[#edeef3]">{ch.title}</h3>
                 <span className="text-[10px] font-bold uppercase tracking-widest text-[#00E5FF] bg-[#00E5FF]/10 border border-[#00E5FF]/20 rounded-full px-2 py-0.5">
                   {ch.badge}
                 </span>
               </div>
-              <p className="text-sm text-gray-400 mb-5 leading-relaxed">{ch.description}</p>
+              <p className="text-sm text-[#9198b7] mb-5 leading-relaxed">{ch.description}</p>
               {ch.href ? (
                 <a
                   href={ch.href}
@@ -142,16 +141,16 @@ export default function Support() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
           >
-            <h3 className="text-2xl font-display font-bold text-white mb-6">Common issues</h3>
+            <h3 className="text-2xl font-display font-bold text-[#edeef3] mb-6">Common issues</h3>
             <div className="space-y-4">
               {COMMON_ISSUES.map((issue) => (
-                <div key={issue.title} className="flex gap-4 p-4 rounded-xl border border-white/10 bg-white/5">
+                <div key={issue.title} className="flex gap-4 p-4 rounded-xl border border-[#3c4561] bg-[#171c2f] hover:border-[#00E5FF]/30 transition-colors">
                   <div className="p-2 rounded-lg bg-[#00E5FF]/10 shrink-0">
                     <issue.icon size={16} className="text-[#00E5FF]" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-white mb-0.5">{issue.title}</p>
-                    <p className="text-xs text-gray-400 leading-relaxed">{issue.desc}</p>
+                    <p className="text-sm font-semibold text-[#edeef3] mb-0.5">{issue.title}</p>
+                    <p className="text-xs text-[#9198b7] leading-relaxed">{issue.desc}</p>
                   </div>
                 </div>
               ))}
@@ -164,50 +163,50 @@ export default function Support() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
           >
-            <h3 className="text-2xl font-display font-bold text-white mb-6">Send a message</h3>
+            <h3 className="text-2xl font-display font-bold text-[#edeef3] mb-6">Send a message</h3>
             {submitted ? (
               <div className="flex flex-col items-center justify-center h-64 rounded-2xl border border-[#00E5FF]/30 bg-[#00E5FF]/5 text-center p-8">
                 <div className="w-12 h-12 rounded-full bg-[#00E5FF]/20 flex items-center justify-center mb-4">
                   <MessageSquare size={20} className="text-[#00E5FF]" />
                 </div>
                 <h4 className="text-white font-semibold mb-2">Message sent!</h4>
-                <p className="text-sm text-gray-400">We&apos;ll get back to you within 24 hours.</p>
+                <p className="text-sm text-[#9198b7]">We&apos;ll get back to you within 24 hours.</p>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1.5">Name</label>
+                    <label className="block text-xs text-[#9198b7] mb-1.5">Name</label>
                     <input
                       required
                       type="text"
                       value={formState.name}
                       onChange={e => setFormState(s => ({ ...s, name: e.target.value }))}
                       placeholder="Your name"
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-gray-500 focus:border-[#00E5FF]/40 focus:outline-none focus:ring-1 focus:ring-[#00E5FF]/20 transition-all"
+                      className="w-full rounded-xl border border-[#3c4561] bg-[#0d1020] px-4 py-3 text-sm text-[#edeef3] placeholder-[#9198b7] focus:border-[#00E5FF]/40 focus:outline-none focus:ring-1 focus:ring-[#00E5FF]/20 transition-all"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1.5">Email</label>
+                    <label className="block text-xs text-[#9198b7] mb-1.5">Email</label>
                     <input
                       required
                       type="email"
                       value={formState.email}
                       onChange={e => setFormState(s => ({ ...s, email: e.target.value }))}
                       placeholder="you@email.com"
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-gray-500 focus:border-[#00E5FF]/40 focus:outline-none focus:ring-1 focus:ring-[#00E5FF]/20 transition-all"
+                      className="w-full rounded-xl border border-[#3c4561] bg-[#0d1020] px-4 py-3 text-sm text-[#edeef3] placeholder-[#9198b7] focus:border-[#00E5FF]/40 focus:outline-none focus:ring-1 focus:ring-[#00E5FF]/20 transition-all"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1.5">Message</label>
+                  <label className="block text-xs text-[#9198b7] mb-1.5">Message</label>
                   <textarea
                     required
                     rows={5}
                     value={formState.message}
                     onChange={e => setFormState(s => ({ ...s, message: e.target.value }))}
                     placeholder="Describe your issue or question…"
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-gray-500 focus:border-[#00E5FF]/40 focus:outline-none focus:ring-1 focus:ring-[#00E5FF]/20 transition-all resize-none"
+                    className="w-full rounded-xl border border-[#3c4561] bg-[#0d1020] px-4 py-3 text-sm text-[#edeef3] placeholder-[#9198b7] focus:border-[#00E5FF]/40 focus:outline-none focus:ring-1 focus:ring-[#00E5FF]/20 transition-all resize-none"
                   />
                 </div>
                 <button

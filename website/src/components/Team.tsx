@@ -14,13 +14,21 @@ const contributions = [
 export default function Team() {
   return (
     <section id="team" className="py-24 relative overflow-hidden bg-[#05070B]">
-      <div className="container mx-auto px-6 md:px-12 relative z-10">
+      <div className="container mx-auto px-6 md:px-16 max-w-7xl relative z-10">
         <div className="text-center max-w-3xl mx-auto mb-16">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="inline-flex items-center px-4 py-1.5 rounded-full bg-[#171c2f] border border-[#3c4561] text-xs font-bold tracking-widest text-[#9198b7] uppercase mb-6"
+          >
+            THE TEAM
+          </motion.div>
           <motion.h2
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-4xl md:text-5xl font-display font-bold mb-6"
+            className="text-4xl md:text-5xl font-display font-bold mb-6 text-[#edeef3]"
           >
             Built by <span className="text-gradient">one dev</span>
           </motion.h2>
@@ -29,7 +37,7 @@ export default function Team() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.1 }}
-            className="text-gray-400 text-lg"
+            className="text-[#9198b7] text-lg"
           >
             Mini Manager was designed, engineered, and shipped solo for the Build with Gemini hackathon.
           </motion.p>
@@ -40,7 +48,7 @@ export default function Team() {
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="glass-card rounded-3xl p-8 md:p-12 border border-white/10 flex flex-col md:flex-row items-center md:items-start gap-10"
+            className="bg-[#171c2f] border border-[#3c4561] rounded-2xl p-8 md:p-12 flex flex-col md:flex-row items-center md:items-start gap-10 hover:border-[#00E5FF]/40 transition-colors"
           >
             {/* Avatar */}
             <div className="flex flex-col items-center gap-4 flex-shrink-0">
@@ -62,7 +70,7 @@ export default function Team() {
                 href="https://github.com/DrGitman/Mini-Manager"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 px-4 py-2 rounded-full glass border border-white/10 text-gray-300 hover:text-white text-sm transition-colors"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0d1020] border border-[#3c4561] text-[#bec2d3] hover:text-[#edeef3] hover:border-[#00E5FF]/40 text-sm transition-colors"
               >
                 <GitBranch size={16} />
                 GitHub
@@ -75,11 +83,11 @@ export default function Team() {
               <h4 className="text-white font-bold text-lg mb-6">What went into this</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {contributions.map((c, i) => (
-                  <div key={i} className="flex items-start gap-3 p-4 rounded-xl bg-white/5 border border-white/5">
+                  <div key={i} className="flex items-start gap-3 p-4 rounded-xl bg-[#0d1020] border border-[#3c4561] hover:border-[#00E5FF]/30 transition-colors">
                     <Code2 size={16} className="text-[#00E5FF] mt-0.5 flex-shrink-0" />
                     <div>
-                      <p className="text-white text-sm font-medium">{c.label}</p>
-                      <p className="text-gray-500 text-xs mt-0.5">{c.detail}</p>
+                      <p className="text-[#edeef3] text-sm font-medium">{c.label}</p>
+                      <p className="text-[#9198b7] text-xs mt-0.5">{c.detail}</p>
                     </div>
                   </div>
                 ))}
