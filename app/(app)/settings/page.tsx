@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import {
-  Settings2, Shield, Bell, CreditCard, FolderPlus, X, Loader2, CheckCircle2,
+  Settings2, Shield, Bell, CreditCard, FolderPlus, X, Loader2, CheckCircle2, BookOpen, Plus, ToggleLeft, ToggleRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -15,18 +15,14 @@ import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { getSession } from '@/lib/session'
-import { apiGetPreferences, apiSavePreferences, type Preferences } from '@/lib/api'
+import {
+  apiGetPreferences, apiSavePreferences, type Preferences,
+  apiGetBlocklist, apiAddBlocklist, apiDeleteBlocklist, type BlocklistEntry,
+  apiGetConventions, apiAddConvention, apiToggleConvention, apiDeleteConvention, type Convention,
+} from '@/lib/api'
 import { usePreferences } from '@/lib/preferences-context'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const BLOCKED_PATHS = [
-  'C:\\Windows',
-  'C:\\Program Files',
-  'C:\\Program Files (x86)',
-  'C:\\ProgramData',
-  'C:\\$Recycle.Bin',
-]
 
 const PROTECTED_EXTENSIONS = ['.exe', '.dll', '.sys', '.msi', '.bat', '.cmd']
 
@@ -70,6 +66,19 @@ export default function SettingsPage() {
   // License key input
   const [licenseKey, setLicenseKey] = useState('')
 
+  // Blocklist state
+  const [blocklist, setBlocklist] = useState<BlocklistEntry[]>([])
+  const [blocklistInput, setBlocklistInput] = useState('')
+  const [blocklistReason, setBlocklistReason] = useState('')
+  const [showBlocklistInput, setShowBlocklistInput] = useState(false)
+  const [blocklistLoading, setBlocklistLoading] = useState(false)
+
+  // Conventions state
+  const [conventions, setConventions] = useState<Convention[]>([])
+  const [conventionInput, setConventionInput] = useState('')
+  const [showConventionInput, setShowConventionInput] = useState(false)
+  const [conventionAdding, setConventionAdding] = useState(false)
+
   useEffect(() => {
     const session = getSession()
     if (session) {
@@ -81,6 +90,9 @@ export default function SettingsPage() {
       .then(p => setPrefs(p))
       .catch(() => {/* use defaults */})
       .finally(() => setLoading(false))
+
+    apiGetBlocklist().then(setBlocklist).catch(() => {})
+    apiGetConventions().then(setConventions).catch(() => {})
   }, [])
 
   function update<K extends keyof Preferences>(key: K, value: Preferences[K]) {
@@ -116,6 +128,48 @@ export default function SettingsPage() {
 
   function removeCustomFolder(folder: string) {
     update('custom_folders', prefs.custom_folders.filter(f => f !== folder))
+  }
+
+  async function addBlocklistEntry() {
+    const path = blocklistInput.trim()
+    if (!path) return
+    setBlocklistLoading(true)
+    try {
+      const entry = await apiAddBlocklist(path, blocklistReason.trim() || undefined)
+      setBlocklist(prev => [entry, ...prev])
+      setBlocklistInput('')
+      setBlocklistReason('')
+      setShowBlocklistInput(false)
+    } catch {}
+    setBlocklistLoading(false)
+  }
+
+  async function removeBlocklistEntry(id: string) {
+    await apiDeleteBlocklist(id).catch(() => {})
+    setBlocklist(prev => prev.filter(e => e.id !== id))
+  }
+
+  async function addConvention() {
+    const text = conventionInput.trim()
+    if (!text) return
+    setConventionAdding(true)
+    try {
+      const c = await apiAddConvention(text)
+      setConventions(prev => [c, ...prev])
+      setConventionInput('')
+      setShowConventionInput(false)
+    } catch {}
+    setConventionAdding(false)
+  }
+
+  async function toggleConvention(id: string) {
+    const updated = await apiToggleConvention(id).catch(() => null)
+    if (updated) setConventions(prev => prev.map(c => c.id === id ? updated : c))
+  }
+
+  async function deleteConvention(id: string) {
+    await apiDeleteConvention(id).catch(() => {})
+    setConventions(prev => prev.filter(c => c.id !== id))
   }
 
   async function handleSave() {

@@ -552,6 +552,97 @@ export async function apiDeleteArchivedFile(opId: string): Promise<void> {
   return request(`/api/v1/archive/${opId}`, { method: 'DELETE' })
 }
 
+// ─── Blocklist ────────────────────────────────────────────────────────────────
+
+export interface BlocklistEntry {
+  id: string
+  path: string
+  reason: string | null
+  created_at: string
+}
+
+export async function apiGetBlocklist(): Promise<BlocklistEntry[]> {
+  return request<BlocklistEntry[]>('/api/v1/blocklist')
+}
+
+export async function apiAddBlocklist(path: string, reason?: string): Promise<BlocklistEntry> {
+  return request<BlocklistEntry>('/api/v1/blocklist', {
+    method: 'POST',
+    body: JSON.stringify({ path, reason: reason ?? null }),
+  })
+}
+
+export async function apiDeleteBlocklist(id: string): Promise<void> {
+  return request(`/api/v1/blocklist/${id}`, { method: 'DELETE' })
+}
+
+// ─── Conventions ──────────────────────────────────────────────────────────────
+
+export interface Convention {
+  id: string
+  scope: string
+  rule_text: string
+  compiled: Record<string, unknown> | null
+  source: string
+  active: boolean
+}
+
+export async function apiGetConventions(): Promise<Convention[]> {
+  return request<Convention[]>('/api/v1/conventions')
+}
+
+export async function apiAddConvention(rule_text: string, scope?: string): Promise<Convention> {
+  return request<Convention>('/api/v1/conventions', {
+    method: 'POST',
+    body: JSON.stringify({ rule_text, scope: scope ?? 'global' }),
+  })
+}
+
+export async function apiToggleConvention(id: string): Promise<Convention> {
+  return request<Convention>(`/api/v1/conventions/${id}/toggle`, { method: 'PATCH' })
+}
+
+export async function apiDeleteConvention(id: string): Promise<void> {
+  return request(`/api/v1/conventions/${id}`, { method: 'DELETE' })
+}
+
+// ─── Support ──────────────────────────────────────────────────────────────────
+
+export interface SupportResponse {
+  reply: string
+  escalated: boolean
+  ticket_id: string
+  category: string
+}
+
+export async function apiSupportChat(message: string, email?: string, subject?: string): Promise<SupportResponse> {
+  return request<SupportResponse>('/api/v1/support/chat', {
+    method: 'POST',
+    body: JSON.stringify({ message, email: email ?? null, subject: subject ?? null }),
+  })
+}
+
+export async function apiGetSupportTickets(): Promise<object[]> {
+  return request<object[]>('/api/v1/support/tickets')
+}
+
+// ─── Onboarding ───────────────────────────────────────────────────────────────
+
+export interface OnboardResponse {
+  naming_style: string
+  structure_style: string
+  detected_conventions: { rule_text: string; confidence: number }[]
+  summary: string
+  conventions_saved: number
+}
+
+export async function apiOnboardingAnalyze(fileNames: string[], folderPaths: string[]): Promise<OnboardResponse> {
+  return request<OnboardResponse>('/api/v1/onboarding/analyze', {
+    method: 'POST',
+    body: JSON.stringify({ file_names: fileNames, folder_paths: folderPaths }),
+  })
+}
+
 // ─── Explain ──────────────────────────────────────────────────────────────────
 
 export async function apiExplain(

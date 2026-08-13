@@ -14,9 +14,15 @@ import { useToast } from '@/components/ui/toast'
 import { FixedBar } from '@/components/ui/fixed-bar'
 import type { FileMeta, Proposal, ConfidenceBucket } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { apiClassify, apiSaveScan, apiGetPreferences, apiLogCorrection } from '@/lib/api'
-import type { ClassificationResult, FolderSuggestion } from '@/lib/api'
+import { apiClassify, apiSaveScan, apiGetPreferences, apiLogCorrection, apiMarkApplied, apiOnboardingAnalyze } from '@/lib/api'
+import type { ClassificationResult, FolderSuggestion, ClassifyResponse } from '@/lib/api'
 import { getSession } from '@/lib/session'
+
+// SHA-256 fingerprint matching classify.py: sha256(name.lower() + ext.lower() + size)
+async function sha256Hex(text: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')
+}
 
 // Extensions we can read as text in the browser (non-Electron path)
 const TEXT_EXTS = new Set([
@@ -318,6 +324,7 @@ export default function OrganizePage() {
   const [folderName, setFolderName] = useState('folder')
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [scanMeta, setScanMeta] = useState<{ tokensUsed: number; cacheHits: number; heuristicHits: number; aiCalls: number; sensitiveCount: number; categoryBreakdown: Record<string, number> } | null>(null)
 
   // Browser (FSAA) refs
   const fileMapRef = useRef<Map<string, FileMeta>>(new Map())
@@ -531,17 +538,43 @@ export default function OrganizePage() {
     }
   }
 
-  function finishScan(res: Awaited<ReturnType<typeof apiClassify>>) {
+  function finishScan(res: ClassifyResponse) {
     const all: Proposal[] = res.results.map((r: ClassificationResult) => {
       const file = fileMapRef.current.get(r.id) ?? { id: r.id, name: r.id, extension: '', relativePath: '', sizeBytes: 0, modifiedAt: Date.now() }
       const bucket: ConfidenceBucket = r.confidence >= 0.85 ? 'auto' : r.confidence >= 0.7 ? 'review' : 'input'
       return { id: `p-${r.id}`, file, targetFolder: r.target_folder, newName: r.new_name, category: r.category, reason: r.reason, confidence: r.confidence, bucket, selected: false, source: r.source, sensitivity: r.sensitivity ?? 'none' }
     })
+
+    // Compute category breakdown and sensitivity count
+    const breakdown: Record<string, number> = {}
+    let sensitiveCount = 0
+    for (const p of all) {
+      breakdown[p.category] = (breakdown[p.category] ?? 0) + 1
+      if (p.sensitivity !== 'none') sensitiveCount++
+    }
+    setScanMeta({
+      tokensUsed: res.tokens_used,
+      cacheHits: res.cache_hits,
+      heuristicHits: res.heuristic_hits,
+      aiCalls: res.ai_calls,
+      sensitiveCount,
+      categoryBreakdown: breakdown,
+    })
+
     setProposals(all)
     setFolderSuggestions(res.folder_suggestions ?? [])
     setSelected(new Set(all.filter(p => p.bucket === 'auto').map(p => p.id)))
     setSelectedFolders(new Set())
     setScanState('done')
+
+    // Onboarding: analyze first scan to infer naming conventions
+    const firstScanKey = 'mm.firstScanDone'
+    if (!localStorage.getItem(firstScanKey)) {
+      localStorage.setItem(firstScanKey, '1')
+      const fileNames = all.map(p => p.file.name)
+      const folderPaths = [...new Set(all.map(p => p.file.relativePath ?? '').filter(Boolean))]
+      apiOnboardingAnalyze(fileNames.slice(0, 60), folderPaths.slice(0, 20)).catch(() => {})
+    }
   }
 
   async function handleScan() {
@@ -645,6 +678,14 @@ export default function OrganizePage() {
       confidence: p.confidence, size: p.file.sizeBytes,
       extension: p.file.extension, modified_at: p.file.modifiedAt,
     }))).catch(() => {})
+
+    // Mark as applied for idempotency (fire-and-forget)
+    Promise.all(
+      succeeded.map(async p => {
+        const fp = await sha256Hex(`${p.file.name.toLowerCase()}${p.file.extension.toLowerCase()}${p.file.sizeBytes}`)
+        return { fingerprint: fp, applied_path: `${p.targetFolder}/${p.newName}` }
+      })
+    ).then(entries => apiMarkApplied(entries)).catch(() => {})
 
     await new Promise(r => setTimeout(r, 2500))
     const succeededIds = new Set(succeeded.map(p => p.id))
@@ -896,6 +937,37 @@ export default function OrganizePage() {
           </div>
           <Progress value={scanProgress} className="h-1.5" />
           <p className="mt-2 text-xs text-muted-foreground">Reading files, content previews, and folder structure…</p>
+        </div>
+      )}
+
+      {/* Post-scan summary card */}
+      {scanState === 'done' && scanMeta && (
+        <div className="rounded-xl border border-border bg-card px-5 py-4 flex flex-wrap items-center gap-x-6 gap-y-2">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="size-4 text-green-500 shrink-0" />
+            <span className="text-sm font-medium text-foreground">{proposals.length} files classified</span>
+          </div>
+          {scanMeta.sensitiveCount > 0 && (
+            <div className="flex items-center gap-1.5">
+              <ShieldAlert className="size-3.5 text-amber-500 shrink-0" />
+              <span className="text-xs text-amber-700 font-medium">{scanMeta.sensitiveCount} sensitive</span>
+            </div>
+          )}
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            {scanMeta.heuristicHits > 0 && <span>{scanMeta.heuristicHits} instant</span>}
+            {scanMeta.cacheHits > 0 && <span>{scanMeta.cacheHits} cached</span>}
+            {scanMeta.aiCalls > 0 && <span>{scanMeta.tokensUsed.toLocaleString()} tokens used</span>}
+          </div>
+          <div className="ml-auto flex flex-wrap gap-1.5">
+            {Object.entries(scanMeta.categoryBreakdown)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 6)
+              .map(([cat, count]) => (
+                <span key={cat} className="rounded-full border border-border bg-muted/60 px-2 py-0.5 text-[11px] text-muted-foreground">
+                  {cat} <span className="font-semibold text-foreground">{count}</span>
+                </span>
+              ))}
+          </div>
         </div>
       )}
 
