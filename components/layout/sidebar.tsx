@@ -14,6 +14,7 @@ import {
   Lock,
   LogOut,
   FolderOpen,
+  MessageCircle,
 } from 'lucide-react'
 import { signOut } from '@/lib/session'
 import type { DemoUser } from '@/lib/types'
@@ -43,6 +44,7 @@ export function Sidebar({ user }: SidebarProps) {
     { label: 'Insights',   href: '/insights',    icon: BarChart2,      pro: true },
     { label: 'Documents',  href: '/documents',   icon: FileSearch      },
     { label: 'History',    href: '/history',     icon: History,        pro: true },
+    { label: 'Support',    href: '/support',     icon: MessageCircle   },
   ]
 
   function handleNavClick(item: NavItem, e: React.MouseEvent) {
