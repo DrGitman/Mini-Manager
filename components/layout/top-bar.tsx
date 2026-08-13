@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import { useEffect, useState, useCallback } from 'react'
-import { Bell, Settings, User, LogOut, Sparkles, FlaskConical, ScanLine, Undo2, ListPlus, BarChart3, Archive } from 'lucide-react'
+import { Bell, Settings, User, LogOut, Sparkles, ScanLine, Undo2, ListPlus, BarChart3, Archive } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { signOut } from '@/lib/session'
-import { getDemoScansUsed, DEMO_LIMIT } from '@/lib/demo'
 import { apiSearch } from '@/lib/api'
 import { formatBytes } from '@/lib/types'
 import SearchBar, { type SearchResult } from '@/components/command-palette'
@@ -63,15 +62,10 @@ export function TopBar({ unreadCount, user, aiOpen, onAiToggle }: TopBarProps) {
   const router = useRouter()
   const pathname = usePathname()
   const title = getTitle(pathname)
-  const [scansUsed, setScansUsed] = useState(0)
   const [recents, setRecents] = useState<string[]>([])
 
   useEffect(() => {
-    setScansUsed(getDemoScansUsed())
     setRecents(loadRecents())
-    const handler = () => setScansUsed(getDemoScansUsed())
-    window.addEventListener('mm:demo-scan', handler)
-    return () => window.removeEventListener('mm:demo-scan', handler)
   }, [])
 
   function handleRecentsChange(next: string[]) {
@@ -159,7 +153,6 @@ export function TopBar({ unreadCount, user, aiOpen, onAiToggle }: TopBarProps) {
   const initials = user?.avatarInitials ?? 'U'
   const name = user?.name ?? 'Guest'
   const email = user?.email ?? ''
-  const expired = scansUsed >= DEMO_LIMIT
 
   function handleSignOut() {
     signOut()
@@ -170,16 +163,6 @@ export function TopBar({ unreadCount, user, aiOpen, onAiToggle }: TopBarProps) {
     <header className="flex h-14 shrink-0 items-center gap-4 border-b border-border bg-card px-6">
       {/* Page title */}
       <h1 className="text-base font-semibold text-foreground shrink-0">{title}</h1>
-
-      {/* Demo badge */}
-      <div className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
-        expired
-          ? 'bg-red-50 text-red-600 border border-red-200'
-          : 'bg-amber-50 text-amber-700 border border-amber-200'
-      }`}>
-        <FlaskConical className="size-3" />
-        {expired ? 'Demo expired' : `Demo: ${scansUsed}/${DEMO_LIMIT} scans`}
-      </div>
 
       {/* Search bar — anchored dropdown, no modal */}
       <div className="flex flex-1 justify-center">

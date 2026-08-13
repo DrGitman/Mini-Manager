@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
-import { Check, Sparkles, Star } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { Check, Loader2, Sparkles, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -12,9 +13,8 @@ import {
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
+import { apiCreateCheckout } from '@/lib/api'
+import { getSession, updateUser } from '@/lib/session'
 
 // ---------------------------------------------------------------------------
 // Data
@@ -72,15 +72,37 @@ const TESTIMONIALS = [
 ]
 
 // ---------------------------------------------------------------------------
+// Paddle.js types (minimal)
+// ---------------------------------------------------------------------------
+
+declare global {
+  interface Window {
+    Paddle?: {
+      Environment: { set: (env: string) => void }
+      Initialize: (opts: { token: string; eventCallback?: (e: PaddleEvent) => void }) => void
+      Checkout: {
+        open: (opts: {
+          transactionId?: string
+          items?: Array<{ priceId: string; quantity: number }>
+          customer?: { email: string }
+          customData?: Record<string, string>
+        }) => void
+      }
+    }
+  }
+}
+
+interface PaddleEvent {
+  name: string
+  data?: { status?: string; customer?: { email?: string } }
+}
+
+// ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
 function FeatureItem({ text, muted = false }: { text: string; muted?: boolean }) {
-  if (muted) {
-    return (
-      <li className="text-sm text-muted-foreground font-medium mt-1">{text}</li>
-    )
-  }
+  if (muted) return <li className="text-sm text-muted-foreground font-medium mt-1">{text}</li>
   return (
     <li className="flex items-center gap-2 text-sm text-foreground">
       <Check className="h-4 w-4 text-primary shrink-0" />
@@ -90,28 +112,102 @@ function FeatureItem({ text, muted = false }: { text: string; muted?: boolean })
 }
 
 // ---------------------------------------------------------------------------
+// Hook: load Paddle.js once
+// ---------------------------------------------------------------------------
+
+function usePaddle(onSuccess: () => void) {
+  const ready = useRef(false)
+
+  useEffect(() => {
+    if (ready.current || typeof window === 'undefined') return
+
+    const clientToken = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN
+    if (!clientToken) return
+
+    const existing = document.getElementById('paddle-js')
+    if (existing) {
+      initPaddle(clientToken, onSuccess)
+      ready.current = true
+      return
+    }
+
+    const script = document.createElement('script')
+    script.id = 'paddle-js'
+    script.src = 'https://cdn.paddle.com/paddle/v2/paddle.js'
+    script.async = true
+    script.onload = () => {
+      initPaddle(clientToken, onSuccess)
+      ready.current = true
+    }
+    document.head.appendChild(script)
+  }, [onSuccess])
+}
+
+function initPaddle(token: string, onSuccess: () => void) {
+  if (!window.Paddle) return
+  window.Paddle.Environment.set('sandbox')
+  window.Paddle.Initialize({
+    token,
+    eventCallback(e: PaddleEvent) {
+      if (e.name === 'checkout.completed') {
+        onSuccess()
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
 export default function UpgradePage() {
-  const [annual, setAnnual]                   = useState(false)
-  const [showPayment, setShowPayment]         = useState(false)
-  const [licenseKey, setLicenseKey]           = useState('')
-  const [licenseActivated, setLicenseActivated] = useState(false)
+  const searchParams = useSearchParams()
+  const [annual, setAnnual] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(searchParams.get('paddle_status') === 'success')
 
-  const proMonthly  = 19
-  const proAnnual   = 13
-  const bizMonthly  = 49
-  const bizAnnual   = 34
+  const session = getSession()
+  const currentPlan = session?.plan ?? 'free'
 
-  const proPrice   = annual ? proAnnual  : proMonthly
-  const bizPrice   = annual ? bizAnnual  : bizMonthly
-  const proLabel   = annual ? `$${proPrice}/month billed annually` : `$${proPrice}/month`
-  const bizLabel   = annual ? `$${bizPrice}/seat/month billed annually` : `$${bizPrice}/seat/month`
+  const proMonthly = 19
+  const proAnnual  = 13
+  const bizMonthly = 49
+  const bizAnnual  = 34
 
-  function handleActivateLicense() {
-    if (!licenseKey.trim()) return
-    setLicenseActivated(true)
+  const proPrice = annual ? proAnnual  : proMonthly
+  const bizPrice = annual ? bizAnnual  : bizMonthly
+  const proLabel = annual ? `$${proPrice}/month billed annually` : `$${proPrice}/month`
+  const bizLabel = annual ? `$${bizPrice}/seat/month billed annually` : `$${bizPrice}/seat/month`
+
+  function handleSuccess() {
+    updateUser({ plan: 'pro' })
+    setSuccess(true)
+    setLoading(false)
+  }
+
+  usePaddle(handleSuccess)
+
+  async function handleUpgradePro() {
+    setLoading(true)
+    setError(null)
+    try {
+      const priceId = process.env.NEXT_PUBLIC_PADDLE_PRICE_ID_PRO
+      if (!priceId) throw new Error('Pro price not configured')
+
+      if (!window.Paddle) throw new Error('Paddle.js not loaded yet — try again')
+
+      const email = session?.email
+      window.Paddle.Checkout.open({
+        items: [{ priceId, quantity: 1 }],
+        ...(email ? { customer: { email } } : {}),
+        customData: email ? { user_email: email } : {},
+      })
+      setLoading(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong')
+      setLoading(false)
+    }
   }
 
   return (
@@ -121,6 +217,21 @@ export default function UpgradePage() {
         <h1 className="text-3xl font-bold text-foreground">Upgrade Mini Manager</h1>
         <p className="text-muted-foreground mt-2">Unlock unlimited AI organization.</p>
       </div>
+
+      {/* Success banner */}
+      {success && (
+        <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-green-800 text-sm font-medium">
+          <Check className="h-4 w-4 shrink-0" />
+          You&apos;re now on Pro! Enjoy unlimited AI organization.
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-destructive text-sm">
+          {error}
+        </div>
+      )}
 
       {/* Annual / Monthly toggle */}
       <div className="flex items-center justify-center gap-3">
@@ -150,12 +261,10 @@ export default function UpgradePage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <ul className="flex flex-col gap-2">
-              {FREE_FEATURES.map((f) => (
-                <FeatureItem key={f} text={f} />
-              ))}
+              {FREE_FEATURES.map((f) => <FeatureItem key={f} text={f} />)}
             </ul>
             <Button disabled variant="outline" className="w-full mt-2">
-              Current plan
+              {currentPlan === 'free' ? 'Current plan' : 'Downgrade'}
             </Button>
           </CardContent>
         </Card>
@@ -164,9 +273,7 @@ export default function UpgradePage() {
         <Card className="bg-card border-2 border-primary rounded-lg shadow-md">
           <CardHeader className="pb-4 pt-5">
             <div className="flex justify-center -mt-5 mb-3">
-              <Badge className="bg-primary text-primary-foreground shadow-sm">
-                Most Popular
-              </Badge>
+              <Badge className="bg-primary text-primary-foreground shadow-sm">Most Popular</Badge>
             </div>
             <CardTitle className="text-lg font-semibold text-primary">Pro</CardTitle>
             <div>
@@ -177,17 +284,27 @@ export default function UpgradePage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <ul className="flex flex-col gap-2">
-              {PRO_FEATURES.map((f, i) => (
-                <FeatureItem key={f} text={f} muted={i === 0} />
-              ))}
+              {PRO_FEATURES.map((f, i) => <FeatureItem key={f} text={f} muted={i === 0} />)}
             </ul>
-            <Button
-              className="w-full mt-2"
-              onClick={() => setShowPayment(true)}
-            >
-              <Sparkles className="h-4 w-4 mr-1.5" />
-              Upgrade to Pro
-            </Button>
+            {currentPlan === 'pro' ? (
+              <Button disabled variant="outline" className="w-full mt-2">
+                <Check className="h-4 w-4 mr-1.5" />
+                Current plan
+              </Button>
+            ) : (
+              <Button
+                className="w-full mt-2"
+                onClick={handleUpgradePro}
+                disabled={loading}
+              >
+                {loading ? (
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4 mr-1.5" />
+                )}
+                {loading ? 'Opening checkout…' : 'Upgrade to Pro'}
+              </Button>
+            )}
           </CardContent>
         </Card>
 
@@ -203,9 +320,7 @@ export default function UpgradePage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <ul className="flex flex-col gap-2">
-              {BUSINESS_FEATURES.map((f, i) => (
-                <FeatureItem key={f} text={f} muted={i === 0} />
-              ))}
+              {BUSINESS_FEATURES.map((f, i) => <FeatureItem key={f} text={f} muted={i === 0} />)}
             </ul>
             <Button variant="outline" className="w-full mt-2">
               Contact Sales
@@ -219,78 +334,6 @@ export default function UpgradePage() {
         All plans include unlimited undo, archive, and blocked-path protection.{' '}
         <span className="font-medium text-foreground">We never paywall safety.</span>
       </p>
-
-      {/* Payment section */}
-      {showPayment && (
-        <Card className="bg-card border border-border rounded-lg shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold">Activate your license</CardTitle>
-            <CardDescription>
-              Complete your Pro upgrade below
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-5">
-            {/* Invoice */}
-            <div className="rounded-md bg-muted/50 border border-border p-4 flex flex-col gap-1">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">Invoice</p>
-              <p className="text-lg font-bold text-foreground">INV-2026-0031</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Amount due:{' '}
-                <span className="font-medium text-foreground">${proPrice}.00 USD</span>
-              </p>
-            </div>
-
-            {/* Payment instructions */}
-            <div>
-              <p className="text-sm font-medium text-foreground mb-1">Payment instructions</p>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Transfer <span className="font-medium text-foreground">${proPrice}</span> to{' '}
-                <span className="font-mono text-foreground">First National Bank, Acc: 62012345678</span>{' '}
-                referencing your invoice number{' '}
-                <span className="font-medium text-foreground">INV-2026-0031</span>.
-              </p>
-            </div>
-
-            <Separator />
-
-            {/* License key input */}
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="license-key" className="text-sm font-medium">
-                Or paste your license key below
-              </Label>
-              {licenseActivated ? (
-                <div className="flex items-center gap-2 text-green-600 text-sm font-medium">
-                  <Check className="h-4 w-4" />
-                  License activated! Enjoy Pro.
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <Input
-                    id="license-key"
-                    placeholder="XXXX-XXXX-XXXX-XXXX"
-                    value={licenseKey}
-                    onChange={(e) => setLicenseKey(e.target.value)}
-                    className="font-mono flex-1"
-                  />
-                  <Button
-                    onClick={handleActivateLicense}
-                    disabled={!licenseKey.trim()}
-                  >
-                    Activate
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            <p className="text-xs text-muted-foreground">
-              Questions? Email{' '}
-              <a href="mailto:support@minimanager.app" className="text-primary hover:underline">
-                support@minimanager.app
-              </a>
-            </p>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Testimonials */}
       <div>

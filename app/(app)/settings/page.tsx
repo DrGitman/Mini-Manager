@@ -251,45 +251,39 @@ export default function SettingsPage() {
           {/* Downloads */}
           <div className="flex items-center justify-between py-3">
             <div className="space-y-0.5">
-              <p className="text-sm font-medium text-foreground">Downloads</p>
-              <p className="text-xs text-muted-foreground">
-                C:\Users\{userName}\Downloads, your main download location
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-foreground">Downloads</p>
+                <Badge className="text-[10px] h-4 px-1.5 bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800/50">Auto-monitor coming soon</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">C:\Users\{userName}\Downloads</p>
             </div>
-            <Switch
-              checked={prefs.monitor_downloads}
-              onCheckedChange={v => update('monitor_downloads', v)}
-            />
+            <Switch checked={prefs.monitor_downloads} onCheckedChange={v => update('monitor_downloads', v)} />
           </div>
           <Separator />
 
           {/* Desktop */}
           <div className="flex items-center justify-between py-3">
             <div className="space-y-0.5">
-              <p className="text-sm font-medium text-foreground">Desktop</p>
-              <p className="text-xs text-muted-foreground">
-                C:\Users\{userName}\Desktop, files saved to the desktop
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-foreground">Desktop</p>
+                <Badge className="text-[10px] h-4 px-1.5 bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800/50">Auto-monitor coming soon</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">C:\Users\{userName}\Desktop</p>
             </div>
-            <Switch
-              checked={prefs.monitor_desktop}
-              onCheckedChange={v => update('monitor_desktop', v)}
-            />
+            <Switch checked={prefs.monitor_desktop} onCheckedChange={v => update('monitor_desktop', v)} />
           </div>
           <Separator />
 
           {/* Documents */}
           <div className="flex items-center justify-between py-3">
             <div className="space-y-0.5">
-              <p className="text-sm font-medium text-foreground">Documents</p>
-              <p className="text-xs text-muted-foreground">
-                C:\Users\{userName}\Documents, your document library
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-foreground">Documents</p>
+                <Badge className="text-[10px] h-4 px-1.5 bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800/50">Auto-monitor coming soon</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">C:\Users\{userName}\Documents</p>
             </div>
-            <Switch
-              checked={prefs.monitor_documents}
-              onCheckedChange={v => update('monitor_documents', v)}
-            />
+            <Switch checked={prefs.monitor_documents} onCheckedChange={v => update('monitor_documents', v)} />
           </div>
 
           {/* Custom folders */}

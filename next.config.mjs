@@ -5,11 +5,12 @@
 // - Tighten these for production (remove unsafe-eval, use nonces)
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.paddle.com",
+  "style-src 'self' 'unsafe-inline' https://sandbox-cdn.paddle.com https://cdn.paddle.com",
+  "img-src 'self' data: blob: https://*.paddle.com",
   "font-src 'self'",
-  "connect-src 'self' http://localhost:8000 http://127.0.0.1:8000 https://*.neon.tech",
+  "connect-src 'self' http://localhost:8000 http://127.0.0.1:8000 https://*.neon.tech https://*.paddle.com",
+  "frame-src https://sandbox-buy.paddle.com https://buy.paddle.com",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -25,7 +26,7 @@ const securityHeaders = [
   // Don't send full URL as referrer to external sites
   { key: 'Referrer-Policy',          value: 'strict-origin-when-cross-origin' },
   // Restrict browser features
-  { key: 'Permissions-Policy',       value: 'camera=(), microphone=(), geolocation=(), payment=()' },
+  { key: 'Permissions-Policy',       value: 'camera=(), microphone=(), geolocation=()' },
   // Force HTTPS for 1 year (only active over HTTPS)
   { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains; preload' },
   // Content Security Policy
@@ -33,6 +34,7 @@ const securityHeaders = [
 ]
 
 const nextConfig = {
+  allowedDevOrigins: ['fca2-197-234-87-243.ngrok-free.app'],
   typescript: {
     ignoreBuildErrors: true,
   },

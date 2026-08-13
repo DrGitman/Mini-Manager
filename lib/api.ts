@@ -88,6 +88,20 @@ async function request<T>(
   return res.json() as Promise<T>
 }
 
+// ─── Subscriptions ────────────────────────────────────────────────────────────
+
+export interface CheckoutResponse {
+  transaction_id: string
+  checkout_url: string
+}
+
+export async function apiCreateCheckout(priceId?: string): Promise<CheckoutResponse> {
+  return request<CheckoutResponse>('/api/v1/subscriptions/checkout', {
+    method: 'POST',
+    body: JSON.stringify({ price_id: priceId ?? null }),
+  })
+}
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 export interface AuthResponse {
@@ -128,6 +142,16 @@ export interface FileItem {
   extension: string
   size: number
   modified_at: number
+  relative_path?: string
+  content_preview?: string
+}
+
+export interface FolderSuggestion {
+  original_path: string
+  suggested_name: string
+  suggested_path: string
+  reason: string
+  confidence: number
 }
 
 export interface ClassificationResult {
@@ -142,6 +166,7 @@ export interface ClassificationResult {
 
 export interface ClassifyResponse {
   results: ClassificationResult[]
+  folder_suggestions: FolderSuggestion[]
   tokens_used: number
   cache_hits: number
   heuristic_hits: number
@@ -151,10 +176,11 @@ export interface ClassifyResponse {
 export async function apiClassify(
   files: FileItem[],
   existingFolders: string[] = [],
+  rootFolderName: string = '',
 ): Promise<ClassifyResponse> {
   return request<ClassifyResponse>('/api/v1/classify', {
     method: 'POST',
-    body: JSON.stringify({ files, existing_folders: existingFolders }),
+    body: JSON.stringify({ files, existing_folders: existingFolders, root_folder_name: rootFolderName }),
   })
 }
 

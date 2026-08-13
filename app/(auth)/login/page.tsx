@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Eye, EyeOff } from 'lucide-react'
@@ -10,6 +10,9 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { saveSession } from '@/lib/session'
 import { apiLogin } from '@/lib/api'
 
+const eAPI = typeof window !== 'undefined' ? (window as any).electronAPI : undefined
+const isElectron = !!eAPI?.isElectron
+
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
@@ -17,8 +20,35 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [errors, setErrors] = useState<{ email?: string; password?: string; form?: string }>({})
   const [shaking, setShaking] = useState(false)
+
+  // Listen for Google OAuth callback from Electron protocol handler
+  useEffect(() => {
+    if (!isElectron) return
+    eAPI.onGoogleAuthSuccess((data: any) => {
+      setGoogleLoading(false)
+      const initials = data.name.split(' ').slice(0, 2).map((w: string) => w[0].toUpperCase()).join('')
+      saveSession(
+        { name: data.name, email: data.email, avatarInitials: initials, plan: data.plan ?? 'free', joinedAt: Date.now() },
+        data.token,
+        true,
+      )
+      router.push('/organize')
+    })
+    return () => eAPI.removeGoogleAuthListener()
+  }, [])
+
+  async function handleGoogleLogin() {
+    if (isElectron) {
+      setGoogleLoading(true)
+      await eAPI.googleAuthStart()
+      // Result comes back via onGoogleAuthSuccess listener above
+    } else {
+      window.location.href = '/api/v1/auth/google?mode=web'
+    }
+  }
 
   function validate() {
     const next: typeof errors = {}
@@ -132,10 +162,16 @@ export default function LoginPage() {
 
       <button
         type="button"
-        className="flex h-11 w-full items-center justify-center gap-2.5 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+        onClick={handleGoogleLogin}
+        disabled={googleLoading}
+        className="flex h-11 w-full items-center justify-center gap-2.5 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60"
       >
-        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 7.9 3L37 10.1C33.7 7.1 29.1 5 24 5 12.9 5 4 13.9 4 25s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.9"/><path fill="#FF3D00" d="M6.3 15.5 13.9 21c2-5.5 7.1-9.5 13.1-9.5 3.1 0 5.8 1.1 7.9 3L41 8.6C37.5 5.3 31.1 3 24 3 16.3 3 9.6 7.7 6.3 15.5"/><path fill="#4CAF50" d="M24 45c6 0 11.3-2 15.3-5.2l-7.1-5.8C30.2 35.7 27.2 37 24 37c-5.3 0-9.7-3.3-11.3-7.9l-7.6 5.8C8.7 41 15.9 45 24 45"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.3 5.8l7.1 5.8C37.3 43.2 44 38 44 25c0-1.3-.1-2.6-.4-3.9"/></svg>
-        Log in with Google
+        {googleLoading ? (
+          <span className="size-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" />
+        ) : (
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 7.9 3L37 10.1C33.7 7.1 29.1 5 24 5 12.9 5 4 13.9 4 25s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.9"/><path fill="#FF3D00" d="M6.3 15.5 13.9 21c2-5.5 7.1-9.5 13.1-9.5 3.1 0 5.8 1.1 7.9 3L41 8.6C37.5 5.3 31.1 3 24 3 16.3 3 9.6 7.7 6.3 15.5"/><path fill="#4CAF50" d="M24 45c6 0 11.3-2 15.3-5.2l-7.1-5.8C30.2 35.7 27.2 37 24 37c-5.3 0-9.7-3.3-11.3-7.9l-7.6 5.8C8.7 41 15.9 45 24 45"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.3 5.8l7.1 5.8C37.3 43.2 44 38 44 25c0-1.3-.1-2.6-.4-3.9"/></svg>
+        )}
+        {googleLoading ? 'Opening browser…' : 'Log in with Google'}
       </button>
 
       <p className="mt-6 text-center text-sm text-gray-500">

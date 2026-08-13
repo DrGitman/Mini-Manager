@@ -1,0 +1,47 @@
+appId: com.minimanager.desktop
+productName: Mini Manager
+copyright: Copyright © 2025 Mini Manager
+
+directories:
+  output: dist-electron
+  buildResources: electron/assets
+
+# Files to include in the app bundle
+files:
+  - .next/**/*
+  - public/**/*
+  - electron/**/*
+  - node_modules/**/*
+  - package.json
+  - next.config.mjs
+
+# Exclude dev/test artifacts
+npmRebuild: false
+buildDependenciesFromSource: false
+
+# Windows
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  # Run as regular user — no UAC popup for user directories (Downloads, Desktop, etc.)
+  requestedExecutionLevel: asUser
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Mini Manager
+  installerIcon: electron/assets/icon.ico
+  uninstallerIcon: electron/assets/icon.ico
+
+# macOS (for future cross-platform)
+mac:
+  target: dmg
+  category: public.app-category.productivity
+
+# Linux (for future)
+linux:
+  target: AppImage
