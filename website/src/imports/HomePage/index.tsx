@@ -23,6 +23,10 @@ import {
   X,
   Zap,
   Sparkles,
+  MonitorDown,
+  Package,
+  Globe,
+  MessageCircle,
 } from "lucide-react";
 
 // ─── NAVBAR ───────────────────────────────────────────────────────────────────
@@ -42,7 +46,7 @@ function Navbar() {
       <div className="flex items-center justify-between px-6 py-4 max-w-[1204px] mx-auto">
         {/* Logo */}
         <a href="#" className="shrink-0">
-          <img src="/logo-white-full.png" alt="Mini Manager" className="h-8 object-contain" />
+          <img src="/logo-white-full.png" alt="Mini Manager" className="h-12 w-auto object-contain" />
         </a>
 
         {/* Desktop nav */}
@@ -354,7 +358,7 @@ function Features() {
 function Downloads() {
   const options = [
     {
-      emoji: "🪟",
+      Icon: MonitorDown,
       tag: "Windows Installer",
       title: "Setup.exe Direct Download",
       version: "v1.0.0-beta",
@@ -365,7 +369,7 @@ function Downloads() {
       primary: true,
     },
     {
-      emoji: "📦",
+      Icon: Package,
       tag: "Windows Portable",
       title: "Standalone Zip",
       version: "v1.0.0-beta",
@@ -376,7 +380,7 @@ function Downloads() {
       primary: false,
     },
     {
-      emoji: "🌐",
+      Icon: Globe,
       tag: "Live Preview",
       title: "Web Demo",
       version: "No install needed",
@@ -414,7 +418,9 @@ function Downloads() {
             >
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-2xl">{o.emoji}</span>
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#00E5FF]/20 to-[#7C4DFF]/20 flex items-center justify-center">
+                    <o.Icon size={20} className="text-[#00E5FF]" />
+                  </div>
                   <span className="text-[11px] font-medium text-[#9198b7] border border-[#3c4561] rounded-full px-2.5 py-0.5">
                     {o.tag}
                   </span>
@@ -950,20 +956,20 @@ function Support() {
       badge: "Bug Reports",
       desc: "Found a bug or unexpected behavior? Open an issue on GitHub. Include your OS version and steps to reproduce.",
       cta: "Open an Issue",
-      href: "#",
+      href: "https://github.com/DrGitman/Mini-Manager/issues",
     },
     {
-      icon: BookOpen,
+      icon: MessageCircle,
       title: "GitHub Discussions",
       badge: "Community",
       desc: "Questions, feature ideas, or want to show off your setup? GitHub Discussions is the place for it.",
       cta: "Join Discussion",
-      href: "#",
+      href: "https://github.com/DrGitman/Mini-Manager/discussions",
     },
     {
       icon: Mail,
       title: "Email",
-      badge: "Serious Issues",
+      badge: "Direct Support",
       desc: "For security concerns, privacy questions, or anything that needs direct human attention.",
       cta: "Send Email",
       href: "mailto:support@minimanager.app",
@@ -1067,7 +1073,7 @@ function Footer() {
         <div className="flex flex-col lg:flex-row gap-12 w-full">
           {/* Brand */}
           <div className="flex flex-col gap-4 max-w-[300px]">
-            <img src="/logo-white-full.png" alt="Mini Manager" className="h-8 object-contain object-left" />
+            <img src="/logo-white-full.png" alt="Mini Manager" className="h-12 w-auto object-contain object-left" />
             <p className="text-[14px] leading-[1.6] text-[#9198b7]">
               AI-powered file organizer for Windows and web. Scan, classify, and organize your files automatically — with full undo, sensitivity detection, and corrections memory.
             </p>
