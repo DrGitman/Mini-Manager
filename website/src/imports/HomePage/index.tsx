@@ -10,7 +10,7 @@ import {
   Brain,
   Lock,
   ChevronDown,
-  Github,
+  GitBranch,
   Mail,
   BookOpen,
   ArrowRight,
@@ -398,7 +398,7 @@ function Downloads() {
             Built natively for Windows. High-performance desktop file management powered by Groq and Google Gemini.
           </p>
           <a href="#" className="flex items-center gap-2 text-[#bec2d3] hover:text-[#edeef3] font-medium text-[15px] transition-colors mt-1">
-            <Github size={16} /> View on GitHub
+            <GitBranch size={16} /> View on GitHub
           </a>
         </div>
 
@@ -945,7 +945,7 @@ function FAQ() {
 function Support() {
   const channels = [
     {
-      icon: Github,
+      icon: GitBranch,
       title: "GitHub Issues",
       badge: "Bug Reports",
       desc: "Found a bug or unexpected behavior? Open an issue on GitHub. Include your OS version and steps to reproduce.",

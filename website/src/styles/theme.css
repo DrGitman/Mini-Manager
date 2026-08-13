@@ -125,7 +125,8 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    background-color: #0c1120;
+    color: #edeef3;
   }
 
   html {
