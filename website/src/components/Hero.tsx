@@ -23,7 +23,7 @@ export default function Hero() {
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-light dark:glass border-[#00E5FF]/30 mb-8"
           >
             <Sparkles className="w-4 h-4 text-[#00E5FF]" />
-            <span className="text-sm font-medium tracking-wide">Built for Build with Gemini XPRIZE</span>
+            <span className="text-sm font-medium tracking-wide">AI File Organizer for Windows &amp; Web</span>
           </motion.div>
 
           <motion.h1
@@ -34,7 +34,7 @@ export default function Hero() {
           >
             Your AI-Powered
             <br />
-            <span className="text-gradient">Life Assistant</span>
+            <span className="text-gradient">File Organizer</span>
           </motion.h1>
 
           <motion.p
@@ -43,7 +43,7 @@ export default function Hero() {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="text-lg md:text-xl text-gray-400 mb-10 max-w-2xl mx-auto lg:mx-0 leading-relaxed"
           >
-            Mini Manager uses Google's Gemini models to power conversational assistance, intelligent scheduling, personalized recommendations, and contextual decision-making.
+            Mini Manager scans any folder, classifies every file with AI, and auto-organizes them into the right place — with confidence scores, sensitivity detection, and full undo history.
           </motion.p>
 
           <motion.div
@@ -98,13 +98,37 @@ export default function Hero() {
             <div className="absolute inset-0 rounded-[3rem] border-8 border-gray-900 bg-gray-950 overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-10">
               <div className="absolute top-0 inset-x-0 h-7 bg-gray-900 z-20 rounded-b-3xl w-1/2 mx-auto" />
               
-              {/* App Content Placeholder - Replace with actual image later */}
-              <div className="absolute inset-0 bg-gradient-to-br from-[#0A0E17] to-[#111827] flex items-center justify-center flex-col p-6">
-                <div className="w-20 h-20 bg-gradient-to-tr from-[#00E5FF] to-[#7C4DFF] rounded-2xl flex items-center justify-center text-white font-bold text-4xl shadow-[0_0_30px_rgba(0,229,255,0.3)] mb-6 animate-pulse">
-                  M
+              {/* App Preview */}
+              <div className="absolute inset-0 bg-[#0A0E17] flex flex-col">
+                {/* App top bar */}
+                <div className="flex items-center gap-2 px-4 pt-10 pb-3 border-b border-white/5">
+                  <Image src="/logo-white-full.png" alt="Mini Manager" width={100} height={28} className="object-contain" />
                 </div>
-                <h3 className="font-display font-bold text-2xl text-white mb-2">Mini Manager</h3>
-                <p className="text-gray-400 text-center text-sm">Screenshot Placeholder</p>
+                {/* Simulated file list */}
+                <div className="flex-1 px-3 py-3 overflow-hidden flex flex-col gap-2">
+                  {[
+                    { name: "Invoice_Q3.pdf", cat: "Finance", conf: 96, color: "#00E5FF" },
+                    { name: "resume_final.docx", cat: "Career", conf: 91, color: "#7C4DFF" },
+                    { name: "photo_trip.jpg", cat: "Photos", conf: 88, color: "#FF6D00" },
+                    { name: "lecture_notes.txt", cat: "School", conf: 94, color: "#00E5FF" },
+                    { name: "budget_2024.xlsx", cat: "Finance", conf: 97, color: "#00E5FF" },
+                  ].map((f) => (
+                    <div key={f.name} className="flex items-center gap-2 p-2 rounded-lg bg-white/5 border border-white/5">
+                      <div className="w-7 h-7 rounded-md flex-shrink-0" style={{ background: `${f.color}22`, border: `1px solid ${f.color}44` }} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-[10px] font-medium truncate">{f.name}</p>
+                        <p className="text-[10px]" style={{ color: f.color }}>{f.cat}</p>
+                      </div>
+                      <span className="text-[9px] text-gray-400 flex-shrink-0">{f.conf}%</span>
+                    </div>
+                  ))}
+                </div>
+                {/* Bottom action bar */}
+                <div className="px-3 pb-4">
+                  <div className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#00E5FF] to-[#7C4DFF] text-white text-[11px] font-bold text-center">
+                    Organize 5 Files →
+                  </div>
+                </div>
               </div>
             </div>
             
@@ -122,7 +146,7 @@ export default function Hero() {
               </div>
               <div>
                 <p className="text-xs text-gray-400 font-medium">Powered by</p>
-                <p className="text-sm text-white font-bold">Google Gemini</p>
+                <p className="text-sm text-white font-bold">Groq + Gemini</p>
               </div>
             </motion.div>
           </div>

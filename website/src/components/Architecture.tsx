@@ -1,64 +1,38 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Database, Server, Smartphone, Lock, Code2, Cloud } from "lucide-react";
+import { Database, Server, Smartphone, Sparkles, Code2, Zap } from "lucide-react";
 
 export default function Architecture() {
   const stack = [
-    { name: "Flutter App", icon: <Smartphone className="text-[#00E5FF]" />, desc: "Cross-platform frontend" },
-    { name: "Firebase Auth", icon: <Lock className="text-yellow-400" />, desc: "Secure authentication" },
-    { name: "Firestore", icon: <Database className="text-orange-400" />, desc: "Realtime NoSQL database" },
-    { name: "Cloud Functions", icon: <Server className="text-blue-400" />, desc: "Serverless backend logic" },
-    { name: "Gemini API", icon: <BrainCircuit className="text-[#7C4DFF]" />, desc: "AI intelligence layer" },
-    { name: "Firebase Storage", icon: <Cloud className="text-gray-300" />, desc: "Secure file storage" },
+    { name: "Electron + Next.js", icon: <Smartphone className="text-[#00E5FF]" />, desc: "Windows desktop app" },
+    { name: "FastAPI", icon: <Server className="text-blue-400" />, desc: "Python API server" },
+    { name: "Groq API", icon: <Zap className="text-yellow-400" />, desc: "File classification AI" },
+    { name: "Gemini API", icon: <Sparkles className="text-[#7C4DFF]" />, desc: "File explanation AI" },
+    { name: "PostgreSQL / Neon", icon: <Database className="text-orange-400" />, desc: "Cloud database" },
+    { name: "asyncpg", icon: <Code2 className="text-gray-300" />, desc: "Async DB driver" },
   ];
-
-  // Quick fallback icon component since BrainCircuit isn't in this import list
-  function BrainCircuit(props: any) {
-    return (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        {...props}
-      >
-        <path d="M12 4.5a2.5 2.5 0 0 0-4.96-.46 2.5 2.5 0 0 0-1.98 3 2.5 2.5 0 0 0-1.32 4.24 3 3 0 0 0 .34 5.58 2.5 2.5 0 0 0 2.96 3.08 2.5 2.5 0 0 0 4.91.05L12 20V4.5Z" />
-        <path d="M16 8V5c0-1.1.9-2 2-2" />
-        <path d="M12 13h4" />
-        <path d="M12 17h6" />
-        <path d="M19 13v4" />
-        <path d="M22 13h-3" />
-        <path d="M22 17h-3" />
-      </svg>
-    );
-  }
 
   return (
     <section id="architecture" className="py-24 relative overflow-hidden">
       <div className="container mx-auto px-6 md:px-12 relative z-10">
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <motion.h2 
+          <motion.h2
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             className="text-4xl md:text-5xl font-display font-bold mb-6"
           >
-            Built on <span className="text-[#00E5FF]">Google Cloud</span>
+            Built on a <span className="text-[#00E5FF]">Modern Stack</span>
           </motion.h2>
-          <motion.p 
+          <motion.p
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.1 }}
             className="text-gray-400 text-lg"
           >
-            A scalable, secure, and modern architecture leveraging the Google ecosystem for maximum performance and reliability.
+            A lean, performant architecture pairing an Electron desktop shell with a FastAPI backend and dual AI models for fast, accurate file organization.
           </motion.p>
         </div>
 

@@ -7,24 +7,24 @@ import { useState } from "react";
 export default function FAQ() {
   const faqs = [
     {
-      question: "Is Mini Manager free to use?",
-      answer: "During the hackathon beta phase, Mini Manager is completely free to use. In the future, we plan to offer a generous free tier alongside a premium subscription for advanced AI features."
+      question: "Is Mini Manager free?",
+      answer: "Yes — Mini Manager has a free tier that lets you scan folders and view AI classifications. The Pro plan ($9/mo) unlocks unlimited scans, unlimited AI classifications, and priority support."
     },
     {
-      question: "How does the AI actually work?",
-      answer: "Mini Manager integrates with the Google Gemini API. When you input a task, request a schedule, or upload a document, your data is securely processed by Gemini to generate intelligent, context-aware responses and actions."
+      question: "How does the AI classify files?",
+      answer: "Groq's llama-3.3-70b model reads each file's name, extension, size, and a short content preview to assign it a category (Documents, Images, Videos, Code, Finance, etc.) along with a confidence score. Files scoring ≥85% are auto-applied, 70-84% go to Review, and below 70% need your input."
     },
     {
       question: "Does it work offline?",
-      answer: "Core features like viewing your schedule and basic task management work offline on the native apps. However, advanced AI features powered by Gemini require an active internet connection."
+      answer: "Folder scanning and browsing your file history work fully offline. AI classification and the chat agent require an internet connection to reach the Groq and Gemini APIs."
     },
     {
       question: "Which platforms are supported?",
-      answer: "Currently, Mini Manager is built natively as a Windows desktop application (Setup.exe). We also provide a limited web demo for instant previewing in browser."
+      answer: "Mini Manager ships as a native Windows desktop app built with Electron. There is also a web app version accessible in any modern browser, so you can use it on any operating system."
     },
     {
-      question: "Is my personal data secure?",
-      answer: "Security is our top priority. All user data is encrypted at rest and in transit using industry-standard protocols. We adhere to OWASP Top 10 guidelines and use Firebase Authentication for secure access control."
+      question: "Is my data secure?",
+      answer: "Only file metadata (name, extension, size, a brief content snippet) is ever sent to the AI models — your actual file contents stay on your machine. When the AI moves a file, it goes to the system Recycle Bin first, not permanent deletion, and every action is fully reversible via the history journal."
     }
   ];
 

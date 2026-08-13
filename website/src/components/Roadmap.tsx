@@ -6,25 +6,25 @@ import { CheckCircle2, CircleDashed, Rocket } from "lucide-react";
 export default function Roadmap() {
   const roadmap = [
     {
-      phase: "Phase 1: Foundation",
+      phase: "Phase 1: Core Organizer",
       status: "completed",
       icon: <CheckCircle2 className="text-green-400" size={24} />,
       items: [
-        "Core architecture setup",
-        "Firebase Authentication",
-        "Gemini API Integration",
-        "Basic task management"
+        "FastAPI + Next.js architecture",
+        "Groq llama-3.3-70b file classification",
+        "Folder scanner & auto-organize",
+        "Full undo journal & history"
       ]
     },
     {
-      phase: "Phase 2: Intelligence",
+      phase: "Phase 2: Intelligence Layer",
       status: "current",
       icon: <CircleDashed className="text-[#00E5FF] animate-spin-slow" size={24} />,
       items: [
-        "AI conversational assistant",
-        "Document summarization",
-        "Cross-platform sync",
-        "Budget analysis module"
+        "Corrections memory (continuous learning)",
+        "Natural-language conventions engine",
+        "Sensitivity detection & flagging",
+        "Blocklist & protected paths"
       ]
     },
     {
@@ -32,10 +32,10 @@ export default function Roadmap() {
       status: "upcoming",
       icon: <Rocket className="text-gray-500" size={24} />,
       items: [
-        "Voice command support",
-        "Advanced goal tracking",
-        "Team collaboration features",
-        "Public API release"
+        "Cloud folder sync (Google Drive, OneDrive)",
+        "Scheduled auto-organize with cron",
+        "Multi-user workspace support",
+        "CLI mode & public API"
       ]
     }
   ];
@@ -59,7 +59,7 @@ export default function Roadmap() {
             transition={{ delay: 0.1 }}
             className="text-gray-400 text-lg"
           >
-            Our journey from hackathon prototype to production-ready life assistant.
+            From hackathon prototype to a fully-featured AI file organizer.
           </motion.p>
         </div>
 

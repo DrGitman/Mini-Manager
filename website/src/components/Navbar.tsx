@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Menu, X } from "lucide-react";
+import Image from "next/image";
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -31,13 +32,15 @@ export default function Navbar() {
       }`}
     >
       <div className="container mx-auto px-6 md:px-12 flex items-center justify-between">
-        <a href="#" className="flex items-center gap-2 z-50">
-          <div className="w-10 h-10 bg-gradient-to-tr from-[#00E5FF] to-[#7C4DFF] rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg">
-            M
-          </div>
-          <span className="font-display font-bold text-xl tracking-tight">
-            Mini <span className="text-[#00E5FF]">Manager</span>
-          </span>
+        <a href="#" className="flex items-center z-50">
+          <Image
+            src="/logo-white-full.png"
+            alt="Mini Manager"
+            width={140}
+            height={40}
+            className="object-contain"
+            priority
+          />
         </a>
 
         {/* Desktop Nav */}
@@ -81,6 +84,7 @@ export default function Navbar() {
       {/* Mobile Menu */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-40 bg-[#0A0E17]/95 backdrop-blur-xl pt-24 px-6 flex flex-col gap-6 md:hidden">
+          <Image src="/logo-white-full.png" alt="Mini Manager" width={130} height={38} className="object-contain mb-2" />
           {navLinks.map((link) => (
             <a
               key={link.name}

@@ -5,14 +5,14 @@ import { CheckCircle2, Sparkles, ArrowRight, BrainCircuit } from "lucide-react";
 
 export default function GeminiSection() {
   const geminiFeatures = [
-    "Smart task prioritization",
-    "Natural language understanding",
-    "Daily planning & scheduling",
-    "Document summarization",
-    "Goal tracking & analytics",
-    "Personalized recommendations",
-    "Budget insights & coaching",
-    "Conversational AI assistant"
+    "File classification at scale (Groq llama-3.3-70b)",
+    "Deep file understanding & explanation (Gemini)",
+    "Confidence scoring per classification",
+    "Sensitivity flagging for personal documents",
+    "Corrections memory & continuous learning",
+    "Natural language conventions engine",
+    "AI chat agent for file operations",
+    "Onboarding style inference from first scan"
   ];
 
   return (
@@ -32,27 +32,27 @@ export default function GeminiSection() {
             <Sparkles className="w-8 h-8 text-white" />
           </motion.div>
           
-          <motion.h2 
+          <motion.h2
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             className="text-4xl md:text-5xl font-display font-bold mb-6"
           >
-            Powered by <span className="text-gradient">Google Gemini</span>
+            Dual AI <span className="text-gradient">Intelligence Layer</span>
           </motion.h2>
-          
-          <motion.p 
+
+          <motion.p
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.1 }}
             className="text-gray-300 text-lg leading-relaxed font-medium bg-white/5 p-6 rounded-2xl border border-white/10 glass shadow-xl"
           >
-            Mini Manager uses Google's Gemini models to power conversational assistance, 
-            intelligent scheduling, personalized recommendations, document understanding, 
-            financial insights, and contextual decision-making. Gemini enables natural 
-            language interaction throughout the application, allowing users to manage 
-            their daily lives without learning complex menus or commands.
+            Mini Manager uses two AI models working in tandem. Groq's llama-3.3-70b handles
+            high-speed file classification at scale — reading filenames, extensions, sizes, and
+            content previews to assign categories instantly. Google Gemini provides deep file
+            understanding and explanation, powering the AI chat agent, natural-language rules
+            engine, and onboarding style inference.
           </motion.p>
         </div>
 
@@ -97,31 +97,31 @@ export default function GeminiSection() {
             </h3>
             
             <div className="flex flex-col space-y-6">
-              {/* Step 1: User */}
+              {/* Step 1: User scans folder */}
               <div className="flex items-center justify-between">
                 <div className="flex-1" />
                 <div className="w-10 flex justify-center">
                   <ArrowRight className="text-gray-600 rotate-90 sm:rotate-0" />
                 </div>
                 <div className="flex-1 bg-white/5 border border-white/10 rounded-xl p-4 text-center">
-                  <p className="text-white font-medium text-sm">User Input</p>
-                  <p className="text-gray-500 text-xs mt-1">"I have exams in 2 weeks"</p>
+                  <p className="text-white font-medium text-sm">User Scans Folder</p>
+                  <p className="text-gray-500 text-xs mt-1">Select any directory</p>
                 </div>
               </div>
-              
-              {/* Step 2: Mini Manager Context */}
+
+              {/* Step 2: Mini Manager reads metadata */}
               <div className="flex items-center justify-between">
                 <div className="flex-1 bg-gradient-to-r from-[#7C4DFF]/20 to-[#7C4DFF]/10 border border-[#7C4DFF]/30 rounded-xl p-4 text-center order-3 sm:order-1">
                   <p className="text-white font-medium text-sm">Mini Manager</p>
-                  <p className="text-gray-400 text-xs mt-1">Appends calendar data</p>
+                  <p className="text-gray-400 text-xs mt-1">Reads file metadata</p>
                 </div>
                 <div className="w-10 flex justify-center order-2">
                   <ArrowRight className="text-[#7C4DFF] rotate-90 sm:rotate-0" />
                 </div>
                 <div className="flex-1 order-1 sm:order-3" />
               </div>
-              
-              {/* Step 3: Gemini API */}
+
+              {/* Step 3: Groq classifies */}
               <div className="flex items-center justify-between">
                 <div className="flex-1" />
                 <div className="w-10 flex justify-center">
@@ -131,17 +131,17 @@ export default function GeminiSection() {
                   <div className="absolute inset-0 bg-[#00E5FF]/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 ease-in-out" />
                   <p className="text-white font-medium text-sm flex items-center justify-center gap-2">
                     <Sparkles size={14} className="text-[#00E5FF]" />
-                    Gemini API
+                    Groq llama-3.3-70b
                   </p>
-                  <p className="text-gray-400 text-xs mt-1">Generates study plan</p>
+                  <p className="text-gray-400 text-xs mt-1">Classifies every file</p>
                 </div>
               </div>
-              
-              {/* Step 4: Response */}
+
+              {/* Step 4: Results with confidence scores */}
               <div className="flex items-center justify-between">
                 <div className="flex-1 bg-green-500/10 border border-green-500/20 rounded-xl p-4 text-center order-3 sm:order-1">
-                  <p className="text-white font-medium text-sm">Actionable UI</p>
-                  <p className="text-gray-400 text-xs mt-1">Schedules study blocks</p>
+                  <p className="text-white font-medium text-sm">Results &amp; Confidence</p>
+                  <p className="text-gray-400 text-xs mt-1">Auto-apply, Review, or Input</p>
                 </div>
                 <div className="w-10 flex justify-center order-2">
                   <ArrowRight className="text-green-500 rotate-90 sm:rotate-0" />

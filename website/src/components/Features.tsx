@@ -1,71 +1,71 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { 
-  CalendarDays, 
-  MessageSquareText, 
-  BellRing, 
-  Wallet, 
-  FileText, 
-  Mail, 
-  GraduationCap, 
-  Plane, 
-  Mic 
+import {
+  FolderSearch,
+  BrainCircuit,
+  ShieldAlert,
+  Undo2,
+  ScrollText,
+  BarChart3,
+  MessageSquareText,
+  FolderEdit,
+  Ban
 } from "lucide-react";
 
 const features = [
   {
-    icon: <CalendarDays className="w-6 h-6" />,
-    title: "AI Planner",
-    description: "Tell Gemini your schedule. It returns a perfectly optimized daily timetable.",
+    icon: <FolderSearch className="w-6 h-6" />,
+    title: "Folder Scanner",
+    description: "Scan any folder and let the AI classify every file into categories: Documents, Images, Videos, Code, Finance, and more.",
     color: "text-blue-400"
   },
   {
-    icon: <MessageSquareText className="w-6 h-6" />,
-    title: "AI Assistant",
-    description: "A Jarvis-like conversational interface for your daily life management.",
+    icon: <BrainCircuit className="w-6 h-6" />,
+    title: "AI Auto-Organize",
+    description: "Files are automatically moved to the right folders with smart naming. Confidence buckets let you review borderline decisions before applying.",
     color: "text-[#00E5FF]"
   },
   {
-    icon: <BellRing className="w-6 h-6" />,
-    title: "Smart Reminders",
-    description: "Natural language understanding for complex reminders (e.g., 'Remind me to pay rent after salary').",
+    icon: <ShieldAlert className="w-6 h-6" />,
+    title: "Sensitivity Detection",
+    description: "Flags personal, financial, and identity documents before moving them, so nothing sensitive gets relocated without your approval.",
     color: "text-purple-400"
   },
   {
-    icon: <Wallet className="w-6 h-6" />,
-    title: "AI Budget Coach",
-    description: "Upload spending data. Get personalized insights and savings recommendations.",
+    icon: <Undo2 className="w-6 h-6" />,
+    title: "Full Undo & History",
+    description: "Every file operation is logged in a journal. Roll back any move, rename, or organization action instantly — no data ever lost.",
     color: "text-emerald-400"
   },
   {
-    icon: <FileText className="w-6 h-6" />,
-    title: "Document Reader",
-    description: "Upload PDFs and let the AI summarize the key points instantly.",
+    icon: <ScrollText className="w-6 h-6" />,
+    title: "Conventions & Rules",
+    description: "Write natural-language rules like \"Put all invoices in Finance/Invoices/2026\" — the AI always follows them on every scan.",
     color: "text-orange-400"
   },
   {
-    icon: <Mail className="w-6 h-6" />,
-    title: "AI Email Writer",
-    description: "Draft professional emails to your boss or professors with a single prompt.",
+    icon: <BarChart3 className="w-6 h-6" />,
+    title: "Insights",
+    description: "Detect duplicate files and stale files untouched for 90+ days. Get a clear picture of what's cluttering your storage.",
     color: "text-pink-400"
   },
   {
-    icon: <GraduationCap className="w-6 h-6" />,
-    title: "Study Planner",
-    description: "Have exams coming up? The AI builds a comprehensive revision timetable.",
+    icon: <MessageSquareText className="w-6 h-6" />,
+    title: "AI Chat Agent",
+    description: "Give natural language commands like \"move all PDFs from Downloads to Documents\" and watch the AI handle it for you.",
     color: "text-yellow-400"
   },
   {
-    icon: <Plane className="w-6 h-6" />,
-    title: "Travel Planner",
-    description: "Going on a trip? Get a detailed, day-by-day itinerary tailored to your interests.",
+    icon: <FolderEdit className="w-6 h-6" />,
+    title: "Corrections Memory",
+    description: "Every time you correct an AI decision, Mini Manager learns from it — improving classifications across all future scans.",
     color: "text-cyan-400"
   },
   {
-    icon: <Mic className="w-6 h-6" />,
-    title: "Voice Commands",
-    description: "Manage your entire life hands-free using natural voice interactions.",
+    icon: <Ban className="w-6 h-6" />,
+    title: "Blocklist",
+    description: "Define protected paths that the AI will never touch. Keep sensitive directories completely off-limits, always.",
     color: "text-red-400"
   }
 ];
@@ -108,7 +108,7 @@ export default function Features() {
             transition={{ delay: 0.1 }}
             className="text-gray-400 text-lg"
           >
-            A comprehensive suite of tools designed to streamline your daily routines, powered by the advanced intelligence of Google Gemini.
+            Everything you need to take back control of your file system — powered by Groq and Gemini AI working together to classify, organize, and protect your files.
           </motion.p>
         </div>
 
