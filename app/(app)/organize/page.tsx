@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { FolderOpen, FolderSearch, ArrowRight, CheckSquare, ArrowUpDown, FolderSymlink } from 'lucide-react'
+import { FolderOpen, FolderSearch, ArrowRight, CheckSquare, ArrowUpDown, FolderSymlink, ShieldAlert, ShieldCheck, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -14,7 +14,7 @@ import { useToast } from '@/components/ui/toast'
 import { FixedBar } from '@/components/ui/fixed-bar'
 import type { FileMeta, Proposal, ConfidenceBucket } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { apiClassify, apiSaveScan, apiGetPreferences } from '@/lib/api'
+import { apiClassify, apiSaveScan, apiGetPreferences, apiLogCorrection } from '@/lib/api'
 import type { ClassificationResult, FolderSuggestion } from '@/lib/api'
 import { getSession } from '@/lib/session'
 
@@ -49,6 +49,68 @@ function extBadge(ext: string) {
   )
 }
 
+// ─── Sensitivity badge ────────────────────────────────────────────────────────
+
+function SensitivityBadge({ level }: { level: Proposal['sensitivity'] }) {
+  if (level === 'none') return null
+  const map = {
+    personal: { label: 'Personal', cls: 'text-orange-600 bg-orange-50 border-orange-200' },
+    financial: { label: 'Financial', cls: 'text-yellow-700 bg-yellow-50 border-yellow-200' },
+    identity:  { label: 'Identity',  cls: 'text-red-600 bg-red-50 border-red-200' },
+  }
+  const { label, cls } = map[level]
+  return (
+    <span className={cn('inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-semibold', cls)}>
+      <ShieldAlert className="size-2.5" />{label}
+    </span>
+  )
+}
+
+// ─── Inline editable cell ─────────────────────────────────────────────────────
+
+function EditableCell({ value, onCommit, mono = false }: {
+  value: string
+  onCommit: (next: string) => void
+  mono?: boolean
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { if (editing) inputRef.current?.focus() }, [editing])
+
+  function commit() {
+    setEditing(false)
+    if (draft.trim() && draft.trim() !== value) onCommit(draft.trim())
+    else setDraft(value)
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setEditing(false); setDraft(value) } }}
+        className={cn('w-full rounded border border-primary/50 bg-background px-1.5 py-0.5 text-xs outline-none ring-1 ring-primary/30', mono && 'font-mono')}
+      />
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => { setDraft(value); setEditing(true) }}
+      title="Click to edit"
+      className={cn('group flex items-center gap-1 truncate max-w-[140px] text-xs hover:text-primary transition-colors text-left', mono ? 'font-mono font-semibold text-foreground' : 'text-muted-foreground')}
+    >
+      <span className="truncate">{value}</span>
+      <Pencil className="size-2.5 shrink-0 opacity-0 group-hover:opacity-60 transition-opacity" />
+    </button>
+  )
+}
+
 // ─── File Table ───────────────────────────────────────────────────────────────
 
 interface FileTableProps {
@@ -56,10 +118,11 @@ interface FileTableProps {
   selected: Set<string>
   onToggle: (id: string) => void
   onToggleAll: (ids: string[]) => void
+  onEdit: (id: string, field: 'targetFolder' | 'newName', value: string) => void
   folderName: string
 }
 
-function FileTable({ proposals, selected, onToggle, onToggleAll, folderName }: FileTableProps) {
+function FileTable({ proposals, selected, onToggle, onToggleAll, onEdit, folderName }: FileTableProps) {
   const ids = proposals.map(p => p.id)
   const allChecked = ids.length > 0 && ids.every(id => selected.has(id))
 
@@ -98,23 +161,34 @@ function FileTable({ proposals, selected, onToggle, onToggleAll, folderName }: F
                 className={cn(
                   'border-b border-border/50 last:border-0 transition-colors hover:bg-muted/30',
                   selected.has(p.id) && 'bg-primary/5',
+                  p.sensitivity !== 'none' && 'bg-amber-50/40 dark:bg-amber-950/10',
                 )}
               >
                 <td className="px-3 py-2.5">
                   <Checkbox checked={selected.has(p.id)} onCheckedChange={() => onToggle(p.id)} />
                 </td>
                 <td className="px-3 py-2.5">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 min-w-0">
                     {extBadge(p.file.extension)}
-                    <span className="truncate max-w-[150px] text-muted-foreground text-xs" title={p.file.name}>{p.file.name}</span>
+                    <span className="truncate max-w-[120px] text-muted-foreground text-xs" title={p.file.name}>{p.file.name}</span>
+                    {p.sensitivity !== 'none' && <SensitivityBadge level={p.sensitivity} />}
                   </div>
                 </td>
                 <td className="px-3 py-2.5 text-xs text-muted-foreground max-w-[100px] truncate" title={p.file.relativePath}>{p.file.relativePath || `${folderName}/`}</td>
                 <td className="px-1 text-muted-foreground/40"><ArrowRight className="size-3.5 shrink-0" /></td>
-                <td className="px-3 py-2.5">
-                  <span className="font-mono text-xs font-semibold text-foreground truncate max-w-[150px] block" title={p.newName}>{p.newName}</span>
+                <td className="px-3 py-2.5 min-w-[120px]">
+                  <EditableCell
+                    value={p.newName}
+                    mono
+                    onCommit={v => onEdit(p.id, 'newName', v)}
+                  />
                 </td>
-                <td className="px-3 py-2.5 text-xs text-muted-foreground truncate max-w-[120px]">{p.targetFolder}</td>
+                <td className="px-3 py-2.5 min-w-[120px]">
+                  <EditableCell
+                    value={p.targetFolder}
+                    onCommit={v => onEdit(p.id, 'targetFolder', v)}
+                  />
+                </td>
                 <td className="px-3 py-2.5 text-center">
                   <span className={cn('inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-medium tabular-nums', confidenceColor(p.confidence))}>
                     {p.confidence.toFixed(2)}
@@ -123,7 +197,7 @@ function FileTable({ proposals, selected, onToggle, onToggleAll, folderName }: F
                 <td className="px-3 py-2.5 text-center">
                   <Tooltip>
                     <TooltipTrigger render={<span className="cursor-help truncate max-w-[90px] block text-xs text-muted-foreground underline decoration-dotted mx-auto" />}>
-                      {p.reason.slice(0, 20)}…
+                      {p.reason.slice(0, 20)}{p.reason.length > 20 ? '…' : ''}
                     </TooltipTrigger>
                     <TooltipContent side="top" className="max-w-xs">{p.reason}</TooltipContent>
                   </Tooltip>
@@ -461,7 +535,7 @@ export default function OrganizePage() {
     const all: Proposal[] = res.results.map((r: ClassificationResult) => {
       const file = fileMapRef.current.get(r.id) ?? { id: r.id, name: r.id, extension: '', relativePath: '', sizeBytes: 0, modifiedAt: Date.now() }
       const bucket: ConfidenceBucket = r.confidence >= 0.85 ? 'auto' : r.confidence >= 0.7 ? 'review' : 'input'
-      return { id: `p-${r.id}`, file, targetFolder: r.target_folder, newName: r.new_name, category: r.category, reason: r.reason, confidence: r.confidence, bucket, selected: false, source: r.source }
+      return { id: `p-${r.id}`, file, targetFolder: r.target_folder, newName: r.new_name, category: r.category, reason: r.reason, confidence: r.confidence, bucket, selected: false, source: r.source, sensitivity: r.sensitivity ?? 'none' }
     })
     setProposals(all)
     setFolderSuggestions(res.folder_suggestions ?? [])
@@ -544,10 +618,19 @@ export default function OrganizePage() {
     if (applyState !== 'idle' || selected.size === 0) return
     if (!isElectron && !dirHandleRef.current) { toast('No folder open. Please scan again.'); return }
 
+    // Warn about sensitive files
+    const toApply = proposals.filter(p => selected.has(p.id))
+    const sensitiveCount = toApply.filter(p => p.sensitivity !== 'none').length
+    if (sensitiveCount > 0) {
+      const ok = window.confirm(
+        `${sensitiveCount} sensitive file${sensitiveCount !== 1 ? 's' : ''} (personal, financial, or identity documents) are included in this batch.\n\nAre you sure you want to move them?`
+      )
+      if (!ok) return
+    }
+
     setApplyState('loading')
     setApplyProgress(0)
 
-    const toApply = proposals.filter(p => selected.has(p.id))
     const { succeeded, failed } = isElectron
       ? await applyElectron(toApply)
       : await applyBrowser(toApply)
@@ -662,7 +745,24 @@ export default function OrganizePage() {
   }
 
   function toggleOne(id: string) {
-    setSelected(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
+    setSelected(prev => {
+      const next = new Set(prev)
+      const wasSelected = next.has(id)
+      wasSelected ? next.delete(id) : next.add(id)
+      // Log rejection when user unchecks an auto-bucket proposal
+      if (wasSelected) {
+        const p = proposals.find(x => x.id === id)
+        if (p && p.bucket === 'auto') {
+          apiLogCorrection(
+            `${p.file.extension}, name="${p.file.name}"`,
+            p.targetFolder,
+            'rejected',
+            'rejected',
+          ).catch(() => {})
+        }
+      }
+      return next
+    })
   }
   function toggleMany(ids: string[]) {
     setSelected(prev => {
@@ -671,6 +771,21 @@ export default function OrganizePage() {
       else ids.forEach(id => next.add(id))
       return next
     })
+  }
+
+  function handleEdit(id: string, field: 'targetFolder' | 'newName', value: string) {
+    setProposals(prev => prev.map(p => {
+      if (p.id !== id) return p
+      const oldValue = field === 'targetFolder' ? p.targetFolder : p.newName
+      // Log correction to backend (fire-and-forget)
+      apiLogCorrection(
+        `${p.file.extension}, name="${p.file.name}"`,
+        oldValue,
+        value,
+        field,
+      ).catch(() => {})
+      return { ...p, [field]: value }
+    }))
   }
   function toggleFolder(path: string) {
     setSelectedFolders(prev => { const next = new Set(prev); next.has(path) ? next.delete(path) : next.add(path); return next })
@@ -809,13 +924,13 @@ export default function OrganizePage() {
           </TabsList>
 
           <TabsContent value="auto" className="mt-4">
-            <FileTable proposals={byBucket.auto} selected={selected} onToggle={toggleOne} onToggleAll={toggleMany} folderName={folderName} />
+            <FileTable proposals={byBucket.auto} selected={selected} onToggle={toggleOne} onToggleAll={toggleMany} onEdit={handleEdit} folderName={folderName} />
           </TabsContent>
           <TabsContent value="review" className="mt-4">
-            <FileTable proposals={byBucket.review} selected={selected} onToggle={toggleOne} onToggleAll={toggleMany} folderName={folderName} />
+            <FileTable proposals={byBucket.review} selected={selected} onToggle={toggleOne} onToggleAll={toggleMany} onEdit={handleEdit} folderName={folderName} />
           </TabsContent>
           <TabsContent value="input" className="mt-4">
-            <FileTable proposals={byBucket.input} selected={selected} onToggle={toggleOne} onToggleAll={toggleMany} folderName={folderName} />
+            <FileTable proposals={byBucket.input} selected={selected} onToggle={toggleOne} onToggleAll={toggleMany} onEdit={handleEdit} folderName={folderName} />
           </TabsContent>
           <TabsContent value="folders" className="mt-4">
             <FolderTable suggestions={folderSuggestions} selected={selectedFolders} onToggle={toggleFolder} onToggleAll={toggleManyFolders} folderName={folderName} />
@@ -827,11 +942,19 @@ export default function OrganizePage() {
       {scanState === 'done' && (selectedCount > 0 || selectedFolderCount > 0 || applyState !== 'idle') && (
         <FixedBar>
           <div className="fixed bottom-0 left-56 right-0 z-50 flex items-center gap-3 border-t border-border bg-card/95 px-8 py-3 backdrop-blur-sm">
-            <span className="text-sm text-muted-foreground">
+            <span className="flex items-center gap-2 text-sm text-muted-foreground">
               {selectedCount > 0 && `${selectedCount} file${selectedCount !== 1 ? 's' : ''}`}
               {selectedCount > 0 && selectedFolderCount > 0 && ' · '}
               {selectedFolderCount > 0 && `${selectedFolderCount} folder${selectedFolderCount !== 1 ? 's' : ''}`}
               {' selected'}
+              {(() => {
+                const sensitiveInSelection = proposals.filter(p => selected.has(p.id) && p.sensitivity !== 'none').length
+                return sensitiveInSelection > 0 ? (
+                  <span className="inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
+                    <ShieldAlert className="size-3" />{sensitiveInSelection} sensitive
+                  </span>
+                ) : null
+              })()}
             </span>
             <div className="ml-auto flex items-center gap-2">
               <Button variant="ghost" size="sm" onClick={() => { setSelected(new Set()); setSelectedFolders(new Set()) }}>Clear</Button>

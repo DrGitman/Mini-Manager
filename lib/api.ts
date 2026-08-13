@@ -162,6 +162,7 @@ export interface ClassificationResult {
   confidence: number
   reason: string
   source: 'cache' | 'heuristic' | 'ai'
+  sensitivity: 'none' | 'personal' | 'financial' | 'identity'
 }
 
 export interface ClassifyResponse {
@@ -207,10 +208,11 @@ export interface AgentQuestion {
 export async function apiAgent(
   messages: { role: string; content: string }[],
   folderContext?: string,
+  fileListing?: { folder: string; files: { name: string; ext: string; size_kb: number; path: string }[] }[],
 ): Promise<{ reply: string; steps?: AgentStep[]; needs_clarification?: boolean; questions?: AgentQuestion[] }> {
   return request('/api/v1/agent', {
     method: 'POST',
-    body: JSON.stringify({ messages, folder_context: folderContext }),
+    body: JSON.stringify({ messages, folder_context: folderContext ?? null, file_listing: fileListing ?? null }),
   })
 }
 
@@ -294,6 +296,29 @@ export async function apiSavePreferences(prefs: Preferences): Promise<Preference
   return request<Preferences>('/api/v1/preferences', {
     method: 'PUT',
     body: JSON.stringify(prefs),
+  })
+}
+
+// ─── Corrections ─────────────────────────────────────────────────────────────
+
+export async function apiLogCorrection(
+  pattern: string,
+  proposed: string,
+  corrected: string,
+  field: 'target_folder' | 'new_name' | 'rejected' = 'target_folder',
+): Promise<void> {
+  await request('/api/v1/corrections', {
+    method: 'POST',
+    body: JSON.stringify({ pattern, proposed, corrected, field }),
+  })
+}
+
+export async function apiMarkApplied(
+  entries: { fingerprint: string; applied_path: string }[],
+): Promise<void> {
+  await request('/api/v1/applied', {
+    method: 'POST',
+    body: JSON.stringify({ entries }),
   })
 }
 

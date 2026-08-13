@@ -6,14 +6,18 @@ import {
 } from 'react'
 import {
   Sparkles, X, SendHorizonal, Mic, MicOff, CheckCircle2,
-  ChevronDown, ChevronLeft, Plus, Clock, Trash2,
+  ChevronDown, ChevronLeft, ChevronRight, Plus, Clock, Trash2,
   Copy, ThumbsUp, RotateCcw, Pencil,
 } from 'lucide-react'
 import { BouncingDots } from '@/components/ui/bouncing-dots'
 import { cn } from '@/lib/utils'
 import { timeAgo } from '@/lib/types'
-import { apiAgent } from '@/lib/api'
+import { apiAgent, apiGetPreferences } from '@/lib/api'
 import type { AgentStep, AgentQuestion } from '@/lib/api'
+import { getSession } from '@/lib/session'
+
+const eAPI = typeof window !== 'undefined' ? (window as any).electronAPI : undefined
+const isElectron = !!eAPI?.isElectron
 
 declare global {
   interface Window {
@@ -561,6 +565,61 @@ const SUGGESTIONS = [
   'Sort files alphabetically by name',
 ]
 
+// ─── Scan scope helpers ───────────────────────────────────────────────────────
+
+interface FileListing {
+  folder: string
+  files: { name: string; ext: string; size_kb: number; path: string }[]
+}
+
+async function buildFileListing(): Promise<FileListing[]> {
+  if (!isElectron) return []
+  try {
+    const prefs = await apiGetPreferences()
+    const session = getSession()
+    const username = session?.name?.split(' ')[0] ?? 'User'
+
+    // Build list of scope paths
+    const scopePaths: string[] = []
+    const platform = eAPI?.platform ?? 'win32'
+    const home = platform === 'win32'
+      ? `C:\\Users\\${username}`
+      : `/Users/${username}`
+
+    if (prefs.monitor_downloads) scopePaths.push(platform === 'win32' ? `${home}\\Downloads` : `${home}/Downloads`)
+    if (prefs.monitor_desktop) scopePaths.push(platform === 'win32' ? `${home}\\Desktop` : `${home}/Desktop`)
+    if (prefs.monitor_documents) scopePaths.push(platform === 'win32' ? `${home}\\Documents` : `${home}/Documents`)
+    for (const f of prefs.custom_folders ?? []) {
+      if (f) scopePaths.push(f)
+    }
+
+    if (scopePaths.length === 0) return []
+
+    // Scan each folder
+    const listings: FileListing[] = []
+    for (const folderPath of scopePaths) {
+      try {
+        const { files } = await eAPI.scanDirectory(folderPath)
+        const folderName = folderPath.split(/[\\/]/).pop() ?? folderPath
+        listings.push({
+          folder: `${folderName} (${folderPath})`,
+          files: files.slice(0, 300).map((f: any) => ({
+            name: f.name,
+            ext: f.extension,
+            size_kb: Math.round((f.sizeBytes ?? 0) / 1024),
+            path: f.absolutePath ?? f.relativePath ?? f.name,
+          })),
+        })
+      } catch {
+        // folder doesn't exist or no access — skip silently
+      }
+    }
+    return listings
+  } catch {
+    return []
+  }
+}
+
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
 export function AiPanel({ onClose }: { onClose: () => void }) {
@@ -584,6 +643,7 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const transcriptRef = useRef('')
+  const scopeListingRef = useRef<FileListing[]>([])
 
   // Autosize textarea
   useEffect(() => {
@@ -681,8 +741,12 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
     setThinking(true)
 
     try {
+      // Refresh file listing on every send so agent always has current file state
+      const fileListing = await buildFileListing()
+      scopeListingRef.current = fileListing
+
       const apiHistory = history.map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text }))
-      const res = await apiAgent(apiHistory)
+      const res = await apiAgent(apiHistory, undefined, fileListing.length > 0 ? fileListing : undefined)
       const hasTask = (res.steps ?? []).length > 0
       const questions = res.questions ?? []
 

@@ -21,6 +21,7 @@ export interface Proposal {
   bucket: ConfidenceBucket
   selected: boolean
   source: 'heuristic' | 'ai' | 'rule'
+  sensitivity: 'none' | 'personal' | 'financial' | 'identity'
 }
 
 export interface JournalOperation {
