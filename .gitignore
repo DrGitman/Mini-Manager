@@ -1,5 +1,7 @@
 # Dependencies
 node_modules/
+website/node_modules/
+website/.next/
 .pnp
 .pnp.js
 
@@ -64,3 +66,27 @@ AGENTS.md
 *.p12
 *.pfx
 secrets/
+
+# ── Backend (Python / FastAPI) ─────────────────────────────────────────────────
+# Secrets — NEVER commit
+backend/api/.env
+backend/api/.env.local
+
+# Virtual environment (hundreds of MB)
+backend/api/.venv/
+backend/api/venv/
+
+# Python cache
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/**/*.pyo
+backend/**/*.pyd
+
+# Build / tooling artefacts
+backend/**/*.egg-info/
+backend/api/dist/
+backend/api/build/
+backend/api/.mypy_cache/
+backend/api/.pytest_cache/
+backend/api/htmlcov/
+backend/api/.coverage

@@ -21,6 +21,7 @@ export default function Navbar() {
     { name: "Demo", href: "#demo" },
     { name: "Gemini AI", href: "#gemini" },
     { name: "Architecture", href: "#architecture" },
+    { name: "Support", href: "#support" },
   ];
 
   return (

@@ -10,6 +10,7 @@ import Screenshots from "@/components/Screenshots";
 import Team from "@/components/Team";
 import Roadmap from "@/components/Roadmap";
 import FAQ from "@/components/FAQ";
+import Support from "@/components/Support";
 import Footer from "@/components/Footer";
 import ChatWidget from "@/components/ChatWidget";
 
@@ -28,6 +29,7 @@ export default function Home() {
       <Team />
       <Roadmap />
       <FAQ />
+      <Support />
       <Footer />
       <ChatWidget />
     </main>
