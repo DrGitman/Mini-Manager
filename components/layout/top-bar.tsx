@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { signOut } from '@/lib/session'
 import { apiSearch } from '@/lib/api'
 import { formatBytes } from '@/lib/types'
@@ -209,6 +209,7 @@ export function TopBar({ unreadCount, user, aiOpen, onAiToggle }: TopBarProps) {
             render={<button className="ml-1 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" />}
           >
             <Avatar className="size-8">
+              {user?.avatarUrl && <AvatarImage src={user.avatarUrl} alt={name} />}
               <AvatarFallback className="bg-primary text-white text-xs">{initials}</AvatarFallback>
             </Avatar>
           </DropdownMenuTrigger>

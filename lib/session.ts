@@ -62,7 +62,12 @@ export function updateUser(patch: Partial<DemoUser>): DemoUser | null {
       .map((w) => w.charAt(0).toUpperCase())
       .join('')
   }
-  localStorage.setItem(SESSION_KEY, JSON.stringify(next))
+  // Write back to whichever store already holds the session. Always using
+  // localStorage here would persist the profile of someone who deliberately
+  // signed in without "Remember me".
+  const store =
+    localStorage.getItem(SESSION_KEY) !== null ? localStorage : sessionStorage
+  store.setItem(SESSION_KEY, JSON.stringify(next))
   return next
 }
 

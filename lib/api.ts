@@ -396,17 +396,24 @@ export interface ProfileData {
   email: string
   name: string
   plan: string
+  company: string | null
+  location: string | null
+  bio: string | null
+  avatar_url: string | null
+  created_at: string | null
 }
 
 export async function apiGetProfile(): Promise<ProfileData> {
   return request<ProfileData>('/api/v1/profile')
 }
 
+/** PATCH semantics — only the keys you pass are changed. Pass null to clear. */
 export async function apiUpdateProfile(data: {
-  name: string
+  name?: string
   company?: string | null
   location?: string | null
   bio?: string | null
+  avatar_url?: string | null
 }): Promise<ProfileData> {
   return request<ProfileData>('/api/v1/profile', {
     method: 'PATCH',
@@ -418,6 +425,19 @@ export async function apiChangePassword(oldPassword: string, newPassword: string
   return request('/api/v1/profile/password', {
     method: 'POST',
     body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
+  })
+}
+
+/** Revokes every token for this user — including the caller's own. */
+export async function apiSignOutAllDevices(): Promise<void> {
+  return request('/api/v1/profile/sign-out-all', { method: 'POST' })
+}
+
+/** Permanently deletes the account. Requires the current password. */
+export async function apiDeleteAccount(password: string): Promise<void> {
+  return request('/api/v1/profile', {
+    method: 'DELETE',
+    body: JSON.stringify({ password }),
   })
 }
 
