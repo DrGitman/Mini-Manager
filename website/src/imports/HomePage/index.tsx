@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import {
   FolderSearch,
   Wand2,
@@ -28,6 +29,71 @@ import {
   Globe,
   MessageCircle,
 } from "lucide-react";
+
+// ─── MOTION PRIMITIVES ────────────────────────────────────────────────────────
+
+const EASE = [0.22, 1, 0.36, 1] as const;
+
+/**
+ * Fades + lifts its children the first time they scroll into view.
+ * Renders a plain div when the visitor prefers reduced motion.
+ */
+function Reveal({
+  children,
+  delay = 0,
+  y = 24,
+  className,
+}: {
+  children: ReactNode;
+  delay?: number;
+  y?: number;
+  className?: string;
+}) {
+  const reduceMotion = useReducedMotion();
+  if (reduceMotion) return <div className={className}>{children}</div>;
+
+  return (
+    <motion.div
+      className={className}
+      initial={{ opacity: 0, y }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-80px" }}
+      transition={{ duration: 0.55, delay, ease: EASE }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/**
+ * Same idea as Reveal, but plays immediately on mount rather than on scroll —
+ * for above-the-fold content that is already visible on load.
+ */
+function FadeIn({
+  children,
+  delay = 0,
+  y = 20,
+  className,
+}: {
+  children: ReactNode;
+  delay?: number;
+  y?: number;
+  className?: string;
+}) {
+  const reduceMotion = useReducedMotion();
+  if (reduceMotion) return <div className={className}>{children}</div>;
+
+  return (
+    <motion.div
+      className={className}
+      initial={{ opacity: 0, y }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, delay, ease: EASE }}
+    >
+      {children}
+    </motion.div>
+  );
+}
 
 // ─── NAVBAR ───────────────────────────────────────────────────────────────────
 
@@ -142,15 +208,20 @@ const extColors: Record<string, string> = {
 };
 
 function AppWindowMockup() {
+  const reduceMotion = useReducedMotion();
+
   return (
     <div className="w-full bg-[#131828] rounded-2xl border border-[#3c4561] overflow-hidden shadow-2xl">
       {/* Title bar */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-[#3c4561] bg-[#0f1623]">
-        <div className="w-3 h-3 rounded-full bg-red-500/70" />
-        <div className="w-3 h-3 rounded-full bg-yellow-500/70" />
-        <div className="w-3 h-3 rounded-full bg-green-500/70" />
-        <span className="ml-3 text-[13px] text-[#9198b7]">Mini Manager — Organize</span>
-        <div className="ml-auto flex items-center gap-1">
+      <div className="flex items-center gap-2 px-3 sm:px-4 py-3 border-b border-[#3c4561] bg-[#0f1623]">
+        <div className="w-3 h-3 rounded-full bg-red-500/70 shrink-0" />
+        <div className="w-3 h-3 rounded-full bg-yellow-500/70 shrink-0" />
+        <div className="w-3 h-3 rounded-full bg-green-500/70 shrink-0" />
+        <span className="ml-2 sm:ml-3 text-[12px] sm:text-[13px] text-[#9198b7] truncate">
+          Mini Manager — Organize
+        </span>
+        {/* Tab pills are decorative — drop them below lg so the bar never overflows */}
+        <div className="ml-auto hidden lg:flex items-center gap-1">
           {["Organize", "Insights", "History", "Settings"].map((t, i) => (
             <span
               key={t}
@@ -163,40 +234,50 @@ function AppWindowMockup() {
           ))}
         </div>
       </div>
-      {/* Table header */}
-      <div className="grid grid-cols-[2fr_1fr_1fr] gap-4 px-5 py-2 border-b border-[#3c4561]">
-        <span className="text-[11px] font-medium text-[#9198b7] uppercase tracking-wider">File</span>
-        <span className="text-[11px] font-medium text-[#9198b7] uppercase tracking-wider">Category</span>
-        <span className="text-[11px] font-medium text-[#9198b7] uppercase tracking-wider">Confidence</span>
+      {/* Table header — Category column is dropped on narrow screens */}
+      <div className="grid grid-cols-[1.6fr_1fr] sm:grid-cols-[2fr_1fr_1fr] gap-3 sm:gap-4 px-3 sm:px-5 py-2 border-b border-[#3c4561]">
+        <span className="text-[10px] sm:text-[11px] font-medium text-[#9198b7] uppercase tracking-wider">File</span>
+        <span className="hidden sm:block text-[11px] font-medium text-[#9198b7] uppercase tracking-wider">Category</span>
+        <span className="text-[10px] sm:text-[11px] font-medium text-[#9198b7] uppercase tracking-wider">Confidence</span>
       </div>
       {/* Rows */}
-      {heroFiles.map((f) => (
-        <div
+      {heroFiles.map((f, i) => (
+        <motion.div
           key={f.name}
-          className="grid grid-cols-[2fr_1fr_1fr] gap-4 px-5 py-2.5 border-b border-[#2a3050] hover:bg-[#1d2440] transition-colors"
+          initial={reduceMotion ? false : { opacity: 0, x: -12 }}
+          whileInView={{ opacity: 1, x: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.4, delay: 0.5 + i * 0.08, ease: EASE }}
+          className="grid grid-cols-[1.6fr_1fr] sm:grid-cols-[2fr_1fr_1fr] gap-3 sm:gap-4 px-3 sm:px-5 py-2.5 border-b border-[#2a3050] hover:bg-[#1d2440] transition-colors"
         >
-          <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${extColors[f.ext] ?? "bg-gray-500/20 text-gray-400"}`}>
               {f.ext}
             </span>
-            <span className="text-[13px] text-[#bec2d3] truncate">{f.name}</span>
+            <span className="text-[12px] sm:text-[13px] text-[#bec2d3] truncate">{f.name}</span>
           </div>
-          <span className="text-[13px] text-[#edeef3]">{f.category}</span>
-          <div className="flex items-center gap-2">
+          <span className="hidden sm:block text-[13px] text-[#edeef3] truncate">{f.category}</span>
+          <div className="flex items-center gap-2 min-w-0">
             <div className="flex-1 h-1.5 bg-[#2a3050] rounded-full overflow-hidden">
-              <div
+              <motion.div
                 className="h-full bg-gradient-to-r from-[#00E5FF] to-[#7C4DFF] rounded-full"
-                style={{ width: `${f.confidence}%` }}
+                initial={reduceMotion ? false : { width: 0 }}
+                whileInView={{ width: `${f.confidence}%` }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.7, delay: 0.6 + i * 0.08, ease: EASE }}
+                style={reduceMotion ? { width: `${f.confidence}%` } : undefined}
               />
             </div>
-            <span className="text-[13px] font-bold text-[#edeef3] shrink-0">{f.confidence}%</span>
+            <span className="text-[12px] sm:text-[13px] font-bold text-[#edeef3] shrink-0">{f.confidence}%</span>
           </div>
-        </div>
+        </motion.div>
       ))}
-      <div className="flex items-center justify-between px-5 py-3">
-        <span className="text-[12px] text-[#9198b7]">5 files ready to organize</span>
-        <button className="flex items-center gap-1.5 bg-gradient-to-r from-[#00E5FF] to-[#7C4DFF] text-white text-[13px] font-bold px-4 py-1.5 rounded-lg hover:opacity-90 transition-opacity">
-          Organize 5 Files <ArrowRight size={14} />
+      <div className="flex items-center justify-between gap-3 px-3 sm:px-5 py-3">
+        <span className="text-[11px] sm:text-[12px] text-[#9198b7] truncate">5 files ready to organize</span>
+        <button className="flex items-center gap-1.5 bg-gradient-to-r from-[#00E5FF] to-[#7C4DFF] text-white text-[12px] sm:text-[13px] font-bold px-3 sm:px-4 py-1.5 rounded-lg hover:opacity-90 transition-opacity shrink-0">
+          <span className="hidden sm:inline">Organize 5 Files</span>
+          <span className="sm:hidden">Organize</span>
+          <ArrowRight size={14} />
         </button>
       </div>
     </div>
@@ -210,61 +291,71 @@ function Hero() {
       <div className="absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full bg-[#00E5FF] opacity-[0.04] blur-3xl pointer-events-none" />
       <div className="absolute top-1/2 -right-60 w-[600px] h-[600px] rounded-full bg-[#7C4DFF] opacity-[0.04] blur-3xl pointer-events-none" />
 
-      <div className="flex flex-col items-center px-6 pt-24 pb-20 max-w-[1204px] mx-auto gap-14">
+      <div className="flex flex-col items-center px-5 sm:px-6 pt-16 sm:pt-20 md:pt-24 pb-16 md:pb-20 max-w-[1204px] mx-auto gap-10 md:gap-14">
         {/* Text block */}
-        <div className="flex flex-col items-center gap-6 max-w-[820px]">
+        <div className="flex flex-col items-center gap-5 sm:gap-6 max-w-[820px]">
           {/* Eyebrow */}
-          <div className="bg-[#171c2f] border border-[#3c4561] rounded-full px-4 py-2 flex items-center gap-2">
-            <Brain size={16} className="text-[#00E5FF] shrink-0" />
-            <span className="font-medium text-[#bec2d3] text-[13px] tracking-[0.08em] uppercase">
-              AI FILE ORGANIZER FOR WINDOWS &amp; WEB
-            </span>
-          </div>
+          <FadeIn>
+            <div className="bg-[#171c2f] border border-[#3c4561] rounded-full px-3 sm:px-4 py-2 flex items-center gap-2">
+              <Brain size={16} className="text-[#00E5FF] shrink-0" />
+              <span className="font-medium text-[#bec2d3] text-[11px] sm:text-[13px] tracking-[0.08em] uppercase text-center">
+                AI FILE ORGANIZER FOR WINDOWS &amp; WEB
+              </span>
+            </div>
+          </FadeIn>
 
           {/* Headline */}
-          <h1 className="font-bold text-[52px] md:text-[64px] leading-[1.1] text-[#edeef3] text-center">
-            Your AI-Powered{" "}
-            <span className="bg-gradient-to-r from-[#00E5FF] to-[#7C4DFF] bg-clip-text text-transparent">
-              File Organizer
-            </span>
-          </h1>
+          <FadeIn delay={0.08}>
+            <h1 className="font-bold text-[34px] sm:text-[48px] md:text-[64px] leading-[1.1] text-[#edeef3] text-center text-balance">
+              Your AI-Powered{" "}
+              <span className="bg-gradient-to-r from-[#00E5FF] to-[#7C4DFF] bg-clip-text text-transparent">
+                File Organizer
+              </span>
+            </h1>
+          </FadeIn>
 
           {/* Subtitle */}
-          <p className="text-[17px] leading-[1.65] text-[#bec2d3] text-center max-w-[660px]">
-            Mini Manager scans any folder, classifies every file with AI, and auto-organizes them into the right place — with confidence scores, sensitivity detection, and full undo history.
-          </p>
+          <FadeIn delay={0.16}>
+            <p className="text-[15px] sm:text-[17px] leading-[1.65] text-[#bec2d3] text-center max-w-[660px]">
+              Mini Manager scans any folder, classifies every file with AI, and auto-organizes them into the right place — with confidence scores, sensitivity detection, and full undo history.
+            </p>
+          </FadeIn>
 
           {/* CTAs */}
-          <div className="flex items-center gap-3 flex-wrap justify-center">
-            <a
-              href="#demo"
-              className="bg-gradient-to-r from-[#00E5FF] to-[#7C4DFF] text-white font-bold text-[16px] px-7 py-3.5 rounded-xl hover:opacity-90 transition-opacity"
-            >
-              Try Online Demo
-            </a>
-            <a
-              href="#downloads"
-              className="flex items-center gap-2 bg-[#171c2f] border border-[#3c4561] text-[#bec2d3] font-bold text-[16px] px-7 py-3.5 rounded-xl hover:bg-[#1d2440] transition-colors"
-            >
-              Download App <ArrowRight size={16} />
-            </a>
-          </div>
+          <FadeIn delay={0.24} className="w-full">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-wrap justify-center">
+              <a
+                href="#demo"
+                className="bg-gradient-to-r from-[#00E5FF] to-[#7C4DFF] text-white font-bold text-[15px] sm:text-[16px] px-7 py-3.5 rounded-xl text-center transition-all duration-200 hover:opacity-90 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[#00E5FF]/20"
+              >
+                Try Online Demo
+              </a>
+              <a
+                href="#downloads"
+                className="flex items-center justify-center gap-2 bg-[#171c2f] border border-[#3c4561] text-[#bec2d3] font-bold text-[15px] sm:text-[16px] px-7 py-3.5 rounded-xl transition-all duration-200 hover:bg-[#1d2440] hover:border-[#00E5FF]/40 hover:-translate-y-0.5"
+              >
+                Download App <ArrowRight size={16} />
+              </a>
+            </div>
+          </FadeIn>
 
           {/* Stat badges */}
-          <div className="flex items-center gap-6 flex-wrap justify-center">
-            {["Groq + Gemini", "Full Undo", "Open Source", "No Subscription"].map((b) => (
-              <div key={b} className="flex items-center gap-1.5 text-[14px] font-medium text-[#9198b7]">
-                <Check size={14} className="text-[#00E5FF]" />
-                {b}
-              </div>
-            ))}
-          </div>
+          <FadeIn delay={0.32}>
+            <div className="flex items-center gap-x-5 gap-y-2 flex-wrap justify-center">
+              {["Groq + Gemini", "Full Undo", "Open Source", "Free Plan Available"].map((b) => (
+                <div key={b} className="flex items-center gap-1.5 text-[13px] sm:text-[14px] font-medium text-[#9198b7]">
+                  <Check size={14} className="text-[#00E5FF] shrink-0" />
+                  {b}
+                </div>
+              ))}
+            </div>
+          </FadeIn>
         </div>
 
         {/* App window mockup */}
-        <div className="w-full max-w-[900px]">
+        <FadeIn delay={0.4} y={32} className="w-full max-w-[900px]">
           <AppWindowMockup />
-        </div>
+        </FadeIn>
       </div>
     </section>
   );
@@ -322,11 +413,11 @@ const features = [
 
 function Features() {
   return (
-    <section id="features" className="w-full bg-[#171c2f] py-24 px-6 border-t border-[#3c4561]">
+    <section id="features" className="w-full bg-[#171c2f] py-16 md:py-24 px-5 sm:px-6 border-t border-[#3c4561]">
       <div className="flex flex-col items-center gap-16 max-w-[1204px] mx-auto">
         <div className="flex flex-col items-center gap-4 max-w-[680px] text-center">
           <span className="text-[12px] font-medium text-[#00E5FF] uppercase tracking-[0.15em]">Capabilities</span>
-          <h2 className="font-bold text-[42px] leading-[1.15] text-[#edeef3]">Why Mini Manager?</h2>
+          <h2 className="font-bold text-[28px] sm:text-[34px] md:text-[42px] leading-[1.15] text-[#edeef3]">Why Mini Manager?</h2>
           <p className="text-[16px] leading-[1.65] text-[#bec2d3]">
             Everything you need to take back control of your file system — powered by Groq and Gemini AI working together to classify, organize, and protect your files.
           </p>
@@ -336,7 +427,7 @@ function Features() {
           {features.map(({ icon: Icon, title, desc }) => (
             <div
               key={title}
-              className="bg-[#171c2f] border border-[#3c4561] rounded-2xl p-6 flex flex-col gap-4 hover:border-[#00E5FF]/40 transition-colors"
+              className="bg-[#171c2f] border border-[#3c4561] rounded-2xl p-6 flex flex-col gap-4 transition-all duration-300 hover:border-[#00E5FF]/40 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/30"
             >
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#00E5FF]/20 to-[#7C4DFF]/20 flex items-center justify-center">
                 <Icon size={20} className="text-[#00E5FF]" />
@@ -393,18 +484,18 @@ function Downloads() {
   ];
 
   return (
-    <section id="downloads" className="w-full bg-[#0c1120] py-24 px-6 border-t border-[#3c4561]">
+    <section id="downloads" className="w-full bg-[#0c1120] py-16 md:py-24 px-5 sm:px-6 border-t border-[#3c4561]">
       <div className="flex flex-col items-center gap-16 max-w-[1204px] mx-auto">
-        <div className="flex flex-col items-center gap-4 text-center">
+        <Reveal className="flex flex-col items-center gap-4 text-center">
           <span className="text-[12px] font-medium text-[#00E5FF] uppercase tracking-[0.15em]">Get Started</span>
-          <h2 className="font-bold text-[42px] leading-[1.15] text-[#edeef3]">Mini Manager for Windows</h2>
+          <h2 className="font-bold text-[28px] sm:text-[34px] md:text-[42px] leading-[1.15] text-[#edeef3]">Mini Manager for Windows</h2>
           <p className="text-[16px] leading-[1.65] text-[#bec2d3] max-w-[560px]">
             Built natively for Windows. High-performance desktop file management powered by Groq and Google Gemini.
           </p>
           <a href="#" className="flex items-center gap-2 text-[#bec2d3] hover:text-[#edeef3] font-medium text-[15px] transition-colors mt-1">
             <GitBranch size={16} /> View on GitHub
           </a>
-        </div>
+        </Reveal>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 w-full">
           {options.map((o) => (
@@ -463,11 +554,11 @@ function Demo() {
   ];
 
   return (
-    <section id="demo" className="w-full bg-[#171c2f] py-24 px-6 border-t border-[#3c4561]">
+    <section id="demo" className="w-full bg-[#171c2f] py-16 md:py-24 px-5 sm:px-6 border-t border-[#3c4561]">
       <div className="flex flex-col items-center gap-12 max-w-[1204px] mx-auto">
         <div className="flex flex-col items-center gap-4 max-w-[640px] text-center">
           <span className="text-[12px] font-medium text-[#00E5FF] uppercase tracking-[0.15em]">Live Demo</span>
-          <h2 className="font-bold text-[42px] leading-[1.15] text-[#edeef3]">Experience Mini Manager</h2>
+          <h2 className="font-bold text-[28px] sm:text-[34px] md:text-[42px] leading-[1.15] text-[#edeef3]">Experience Mini Manager</h2>
           <p className="text-[16px] leading-[1.65] text-[#bec2d3]">
             No install required. Launch our web version in guest mode and experience the full AI-powered interface directly in your browser.
           </p>
@@ -554,11 +645,11 @@ function AISection() {
   ];
 
   return (
-    <section id="gemini" className="w-full bg-[#0c1120] py-24 px-6 border-t border-[#3c4561]">
+    <section id="gemini" className="w-full bg-[#0c1120] py-16 md:py-24 px-5 sm:px-6 border-t border-[#3c4561]">
       <div className="flex flex-col items-center gap-16 max-w-[1204px] mx-auto">
         <div className="flex flex-col items-center gap-4 max-w-[700px] text-center">
           <span className="text-[12px] font-medium text-[#00E5FF] uppercase tracking-[0.15em]">AI Intelligence</span>
-          <h2 className="font-bold text-[42px] leading-[1.15] text-[#edeef3]">Dual AI Intelligence Layer</h2>
+          <h2 className="font-bold text-[28px] sm:text-[34px] md:text-[42px] leading-[1.15] text-[#edeef3]">Dual AI Intelligence Layer</h2>
           <p className="text-[16px] leading-[1.65] text-[#bec2d3]">
             Mini Manager uses two AI models working in tandem. Groq's llama-3.3-70b handles high-speed file classification at scale. Google Gemini provides deep understanding, powering the chat agent, rules engine, and onboarding inference.
           </p>
@@ -630,11 +721,11 @@ const layerColors: Record<string, string> = {
 
 function Architecture() {
   return (
-    <section id="architecture" className="w-full bg-[#171c2f] py-24 px-6 border-t border-[#3c4561]">
+    <section id="architecture" className="w-full bg-[#171c2f] py-16 md:py-24 px-5 sm:px-6 border-t border-[#3c4561]">
       <div className="flex flex-col items-center gap-16 max-w-[1204px] mx-auto">
         <div className="flex flex-col items-center gap-4 max-w-[640px] text-center">
           <span className="text-[12px] font-medium text-[#00E5FF] uppercase tracking-[0.15em]">Built On</span>
-          <h2 className="font-bold text-[42px] leading-[1.15] text-[#edeef3]">Modern Stack</h2>
+          <h2 className="font-bold text-[28px] sm:text-[34px] md:text-[42px] leading-[1.15] text-[#edeef3]">Modern Stack</h2>
           <p className="text-[16px] leading-[1.65] text-[#bec2d3]">
             A lean, performant architecture pairing an Electron desktop shell with a FastAPI backend and dual AI models for fast, accurate file organization.
           </p>
@@ -705,15 +796,15 @@ function Screenshots() {
   const s = screens[active];
 
   return (
-    <section className="w-full bg-[#0c1120] py-24 px-6 border-t border-[#3c4561]">
+    <section className="w-full bg-[#0c1120] py-16 md:py-24 px-5 sm:px-6 border-t border-[#3c4561]">
       <div className="flex flex-col items-center gap-16 max-w-[1204px] mx-auto">
-        <div className="flex flex-col items-center gap-4 text-center">
+        <Reveal className="flex flex-col items-center gap-4 text-center">
           <span className="text-[12px] font-medium text-[#00E5FF] uppercase tracking-[0.15em]">Every Screen</span>
-          <h2 className="font-bold text-[42px] leading-[1.15] text-[#edeef3]">Every Screen Purpose-Built</h2>
+          <h2 className="font-bold text-[28px] sm:text-[34px] md:text-[42px] leading-[1.15] text-[#edeef3]">Every Screen Purpose-Built</h2>
           <p className="text-[16px] leading-[1.65] text-[#bec2d3] max-w-[520px]">
-            Four focused views — no clutter, no subscriptions. Just your files, organised.
+            Four focused views, no clutter. Just your files, organised.
           </p>
-        </div>
+        </Reveal>
 
         <div className="w-full flex flex-col lg:flex-row gap-8 items-start">
           {/* Tab list */}
@@ -823,15 +914,15 @@ function Roadmap() {
   };
 
   return (
-    <section className="w-full bg-[#171c2f] py-24 px-6 border-t border-[#3c4561]">
+    <section className="w-full bg-[#171c2f] py-16 md:py-24 px-5 sm:px-6 border-t border-[#3c4561]">
       <div className="flex flex-col items-center gap-16 max-w-[1204px] mx-auto">
-        <div className="flex flex-col items-center gap-4 text-center">
+        <Reveal className="flex flex-col items-center gap-4 text-center">
           <span className="text-[12px] font-medium text-[#00E5FF] uppercase tracking-[0.15em]">Roadmap</span>
-          <h2 className="font-bold text-[42px] leading-[1.15] text-[#edeef3]">Project Roadmap</h2>
+          <h2 className="font-bold text-[28px] sm:text-[34px] md:text-[42px] leading-[1.15] text-[#edeef3]">Project Roadmap</h2>
           <p className="text-[16px] leading-[1.65] text-[#bec2d3] max-w-[480px]">
             From hackathon prototype to a fully-featured AI file organizer.
           </p>
-        </div>
+        </Reveal>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 w-full">
           {roadmap.map((r) => {
@@ -885,7 +976,7 @@ function Roadmap() {
 const faqs = [
   {
     q: "Is Mini Manager free?",
-    a: "Yes — Mini Manager is open source and free to use. No subscription required. Download it from GitHub and run it on your own machine.",
+    a: "There's a free plan that covers 500 file scans and 200 AI classifications per month, with unlimited undo and archive. If you need more, Pro lifts the scan and classification limits, and Business adds per-seat access for teams. The source is on GitHub either way.",
   },
   {
     q: "Does it work offline?",
@@ -913,12 +1004,12 @@ function FAQ() {
   const [open, setOpen] = useState<number | null>(null);
 
   return (
-    <section className="w-full bg-[#0c1120] py-24 px-6 border-t border-[#3c4561]">
+    <section className="w-full bg-[#0c1120] py-16 md:py-24 px-5 sm:px-6 border-t border-[#3c4561]">
       <div className="flex flex-col items-center gap-12 max-w-[800px] mx-auto">
-        <div className="flex flex-col items-center gap-4 text-center">
+        <Reveal className="flex flex-col items-center gap-4 text-center">
           <span className="text-[12px] font-medium text-[#00E5FF] uppercase tracking-[0.15em]">FAQ</span>
-          <h2 className="font-bold text-[42px] leading-[1.15] text-[#edeef3]">Frequently Asked Questions</h2>
-        </div>
+          <h2 className="font-bold text-[28px] sm:text-[34px] md:text-[42px] leading-[1.15] text-[#edeef3]">Frequently Asked Questions</h2>
+        </Reveal>
 
         <div className="flex flex-col gap-3 w-full">
           {faqs.map((f, i) => (
@@ -977,20 +1068,20 @@ function Support() {
   ];
 
   return (
-    <section id="support" className="w-full bg-[#171c2f] py-24 px-6 border-t border-[#3c4561]">
+    <section id="support" className="w-full bg-[#171c2f] py-16 md:py-24 px-5 sm:px-6 border-t border-[#3c4561]">
       <div className="flex flex-col items-center gap-16 max-w-[1204px] mx-auto">
-        <div className="flex flex-col items-center gap-4 text-center">
+        <Reveal className="flex flex-col items-center gap-4 text-center">
           <span className="text-[12px] font-medium text-[#00E5FF] uppercase tracking-[0.15em]">Support</span>
-          <h2 className="font-bold text-[42px] leading-[1.15] text-[#edeef3]">We've got you covered</h2>
+          <h2 className="font-bold text-[28px] sm:text-[34px] md:text-[42px] leading-[1.15] text-[#edeef3]">We've got you covered</h2>
           <p className="text-[16px] leading-[1.65] text-[#bec2d3] max-w-[500px]">
             Open source and community-driven. Multiple channels so you always have a way to get help.
           </p>
-        </div>
+        </Reveal>
 
         {/* Channels */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 w-full">
           {channels.map(({ icon: Icon, title, badge, desc, cta, href }) => (
-            <div key={title} className="bg-[#0c1120] border border-[#3c4561] rounded-2xl p-6 flex flex-col gap-4">
+            <div key={title} className="bg-[#0c1120] border border-[#3c4561] rounded-2xl p-6 flex flex-col gap-4 transition-all duration-300 hover:border-[#00E5FF]/40 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/30">
               <div className="flex items-center justify-between">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#00E5FF]/20 to-[#7C4DFF]/20 flex items-center justify-center">
                   <Icon size={20} className="text-[#00E5FF]" />

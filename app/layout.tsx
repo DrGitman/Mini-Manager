@@ -7,23 +7,14 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 
 export const metadata: Metadata = {
   title: {
-    default: 'Mini Manager: AI File Organizer',
+    default: 'Mini Manager',
     template: '%s · Mini Manager',
   },
   description:
     'Organize messy folders in minutes. Mini Manager scans your files, proposes clean names and folders with AI, and never touches anything without your approval.',
-  generator: 'v0.app',
   icons: {
-    icon: [
-      {
-        url: '/logo-blue-icon.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/logo-white-icon.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-    ],
+    icon: '/logo-blue-icon.png',
+    shortcut: '/logo-blue-icon.png',
     apple: '/logo-blue-icon.png',
   },
 }

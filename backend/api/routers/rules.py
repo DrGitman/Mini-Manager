@@ -6,13 +6,13 @@ import logging
 import os
 import uuid
 
-import google.generativeai as genai
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 
 from ..middleware.auth import get_current_user
 from ..services.db import get_pool
+from ..services import gemini as gemini_svc
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["rules"])
@@ -187,9 +187,11 @@ Guidelines:
 Return ONLY the JSON, no markdown fences, no extra text."""
 
     try:
-        genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        response = model.generate_content(prompt)
+        client = gemini_svc._get_gemini()
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt,
+        )
         text = response.text.strip()
         if text.startswith("```"):
             lines = text.split("\n")
