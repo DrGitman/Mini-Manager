@@ -51,7 +51,7 @@ const DEFAULT_PREFS: Preferences = {
 export default function SettingsPage() {
   const { setPrefs: setContextPrefs } = usePreferences()
   const [userName, setUserName] = useState('User')
-  const [plan, setPlan] = useState<'free' | 'pro'>('free')
+  const [plan, setPlan] = useState<'free' | 'pro' | 'business'>('free')
 
   const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFS)
   const [loading, setLoading] = useState(true)

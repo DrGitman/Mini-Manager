@@ -7,26 +7,38 @@ import { TopBar } from '@/components/layout/top-bar'
 import { AiPanel } from '@/components/layout/ai-panel'
 import { PageTransition } from '@/components/layout/page-transition'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getSession } from '@/lib/session'
+import { getSession, useSession, updateUser } from '@/lib/session'
 import { PreferencesProvider } from '@/lib/preferences-context'
-import { apiGetNotifications } from '@/lib/api'
+import { apiGetNotifications, apiGetProfile } from '@/lib/api'
 import type { DemoUser } from '@/lib/types'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const [user, setUser] = useState<DemoUser | null>(null)
+  // Live session — updates as soon as the profile page writes a new name/photo.
+  const user = useSession()
   const [checking, setChecking] = useState(true)
   const [aiOpen, setAiOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
-    const session = getSession()
-    if (!session) {
+    if (!getSession()) {
       router.replace('/login')
       return
     }
-    setUser(session)
     setChecking(false)
+
+    // The session is written at login from the auth response, which carries no
+    // photo. Pull the server profile once so the avatar and plan are correct
+    // everywhere without waiting for a visit to the profile page.
+    apiGetProfile()
+      .then(p =>
+        updateUser({
+          name: p.name,
+          avatarUrl: p.avatar_url ?? null,
+          plan: p.plan as DemoUser['plan'],
+        }),
+      )
+      .catch(() => {})
 
     // Fetch real unread count
     apiGetNotifications()

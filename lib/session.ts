@@ -1,54 +1,86 @@
 'use client'
 
+import { useSyncExternalStore } from 'react'
 import type { DemoUser } from './types'
 
 const SESSION_KEY = 'mm.session'
 const TOKEN_KEY   = 'mm.token'
 
+// ─── Change notification ──────────────────────────────────────────────────────
+// The app shell holds the session in React state and passes it to the sidebar
+// and top bar. Without this, writing a new avatar or name from the profile page
+// updates storage but nothing re-renders until a full page reload.
+
+type Listener = () => void
+const listeners = new Set<Listener>()
+
+function emitSessionChange(): void {
+  listeners.forEach(fn => fn())
+}
+
+/** Subscribe to session changes in this tab, and to writes from other tabs. */
+export function subscribeToSession(onChange: Listener): () => void {
+  listeners.add(onChange)
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === SESSION_KEY || e.key === null) onChange()
+  }
+  window.addEventListener('storage', onStorage)
+  return () => {
+    listeners.delete(onChange)
+    window.removeEventListener('storage', onStorage)
+  }
+}
+
+// useSyncExternalStore requires a referentially stable snapshot, so cache the
+// parsed object and only re-parse when the underlying string actually changes.
+let _cachedRaw: string | null = null
+let _cachedUser: DemoUser | null = null
+
+function readRaw(): string | null {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem(SESSION_KEY) ?? sessionStorage.getItem(SESSION_KEY)
+}
+
+function getSessionSnapshot(): DemoUser | null {
+  const raw = readRaw()
+  if (raw !== _cachedRaw) {
+    _cachedRaw = raw
+    try {
+      _cachedUser = raw ? (JSON.parse(raw) as DemoUser) : null
+    } catch {
+      _cachedUser = null
+    }
+  }
+  return _cachedUser
+}
+
+/** Live session — re-renders whenever the session is written anywhere. */
+export function useSession(): DemoUser | null {
+  return useSyncExternalStore(subscribeToSession, getSessionSnapshot, () => null)
+}
+
+// ─── Read / write ─────────────────────────────────────────────────────────────
+
 export function getSession(): DemoUser | null {
   if (typeof window === 'undefined') return null
-  try {
-    const raw = localStorage.getItem(SESSION_KEY) ?? sessionStorage.getItem(SESSION_KEY)
-    return raw ? (JSON.parse(raw) as DemoUser) : null
-  } catch {
-    return null
-  }
+  return getSessionSnapshot()
+}
+
+/** Which store currently holds the session — set by the "Remember me" choice. */
+function activeStore(): Storage {
+  return localStorage.getItem(SESSION_KEY) !== null ? localStorage : sessionStorage
 }
 
 export function saveSession(user: DemoUser, token: string, remember = true): void {
   const store = remember ? localStorage : sessionStorage
   store.setItem(SESSION_KEY, JSON.stringify(user))
   store.setItem(TOKEN_KEY, token)
+  emitSessionChange()
 }
 
 export function getToken(): string | null {
   if (typeof window === 'undefined') return null
   return localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY)
-}
-
-/** Legacy helper kept for compatibility — use saveSession for real auth */
-export function signIn(email: string, name?: string): DemoUser {
-  const cleanName =
-    name?.trim() ||
-    email
-      .split('@')[0]
-      .split(/[.\-_]/)
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(' ')
-  const initials = cleanName
-    .split(' ')
-    .slice(0, 2)
-    .map((w) => w.charAt(0).toUpperCase())
-    .join('')
-  const user: DemoUser = {
-    name: cleanName,
-    email,
-    avatarInitials: initials || 'U',
-    plan: 'free',
-    joinedAt: Date.now(),
-  }
-  localStorage.setItem(SESSION_KEY, JSON.stringify(user))
-  return user
 }
 
 export function updateUser(patch: Partial<DemoUser>): DemoUser | null {
@@ -65,9 +97,8 @@ export function updateUser(patch: Partial<DemoUser>): DemoUser | null {
   // Write back to whichever store already holds the session. Always using
   // localStorage here would persist the profile of someone who deliberately
   // signed in without "Remember me".
-  const store =
-    localStorage.getItem(SESSION_KEY) !== null ? localStorage : sessionStorage
-  store.setItem(SESSION_KEY, JSON.stringify(next))
+  activeStore().setItem(SESSION_KEY, JSON.stringify(next))
+  emitSessionChange()
   return next
 }
 
@@ -76,4 +107,5 @@ export function signOut(): void {
   localStorage.removeItem(TOKEN_KEY)
   sessionStorage.removeItem(SESSION_KEY)
   sessionStorage.removeItem(TOKEN_KEY)
+  emitSessionChange()
 }

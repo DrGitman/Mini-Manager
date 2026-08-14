@@ -98,7 +98,7 @@ export interface DemoUser {
   avatarInitials: string
   /** data: URL of the uploaded profile photo; falls back to initials when absent. */
   avatarUrl?: string | null
-  plan: 'free' | 'pro'
+  plan: 'free' | 'pro' | 'business'
   joinedAt: number
 }
 
