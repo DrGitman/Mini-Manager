@@ -11,22 +11,31 @@ const TOKEN_KEY   = 'mm.token'
 // and top bar. Without this, writing a new avatar or name from the profile page
 // updates storage but nothing re-renders until a full page reload.
 
+// The event travels on `window` rather than a module-level Set on purpose:
+// Next.js Fast Refresh re-evaluates this module, which would leave subscribers
+// attached to the previous module instance's Set while writers notify the new
+// one. `window` is shared across instances, so the two can never desync.
+const SESSION_EVENT = 'mm:session-change'
+
 type Listener = () => void
-const listeners = new Set<Listener>()
 
 function emitSessionChange(): void {
-  listeners.forEach(fn => fn())
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new Event(SESSION_EVENT))
 }
 
 /** Subscribe to session changes in this tab, and to writes from other tabs. */
 export function subscribeToSession(onChange: Listener): () => void {
-  listeners.add(onChange)
+  if (typeof window === 'undefined') return () => {}
+  // Same tab.
+  window.addEventListener(SESSION_EVENT, onChange)
+  // Other tabs — `storage` only fires on the tabs that did NOT write.
   const onStorage = (e: StorageEvent) => {
     if (e.key === SESSION_KEY || e.key === null) onChange()
   }
   window.addEventListener('storage', onStorage)
   return () => {
-    listeners.delete(onChange)
+    window.removeEventListener(SESSION_EVENT, onChange)
     window.removeEventListener('storage', onStorage)
   }
 }

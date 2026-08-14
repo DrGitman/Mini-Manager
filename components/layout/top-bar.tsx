@@ -11,7 +11,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { signOut } from '@/lib/session'
 import { apiSearch } from '@/lib/api'
 import { formatBytes } from '@/lib/types'
@@ -208,10 +207,21 @@ export function TopBar({ unreadCount, user, aiOpen, onAiToggle }: TopBarProps) {
           <DropdownMenuTrigger
             render={<button className="ml-1 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" />}
           >
-            <Avatar className="size-8">
-              {user?.avatarUrl && <AvatarImage src={user.avatarUrl} alt={name} />}
-              <AvatarFallback className="bg-primary text-white text-xs">{initials}</AvatarFallback>
-            </Avatar>
+            {/* Rendered directly rather than via Avatar.Root: that primitive
+                tracks image load state internally, which left the circle blank
+                after the photo was removed. */}
+            {user?.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- data: URL, no loader needed
+              <img
+                src={user.avatarUrl}
+                alt={name}
+                className="size-8 rounded-full object-cover"
+              />
+            ) : (
+              <span className="flex size-8 items-center justify-center rounded-full bg-primary text-xs font-medium text-white">
+                {initials}
+              </span>
+            )}
           </DropdownMenuTrigger>
           <DropdownMenuContent side="bottom" align="end" className="w-48">
             <div className="px-2 py-1.5">

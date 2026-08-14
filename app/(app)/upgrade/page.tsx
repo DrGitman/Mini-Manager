@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Check, Loader2, Sparkles, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,8 +13,7 @@ import {
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
-import { apiCreateCheckout } from '@/lib/api'
-import { getSession, updateUser } from '@/lib/session'
+import { getSession } from '@/lib/session'
 
 // ---------------------------------------------------------------------------
 // Data
@@ -72,32 +71,6 @@ const TESTIMONIALS = [
 ]
 
 // ---------------------------------------------------------------------------
-// Paddle.js types (minimal)
-// ---------------------------------------------------------------------------
-
-declare global {
-  interface Window {
-    Paddle?: {
-      Environment: { set: (env: string) => void }
-      Initialize: (opts: { token: string; eventCallback?: (e: PaddleEvent) => void }) => void
-      Checkout: {
-        open: (opts: {
-          transactionId?: string
-          items?: Array<{ priceId: string; quantity: number }>
-          customer?: { email: string }
-          customData?: Record<string, string>
-        }) => void
-      }
-    }
-  }
-}
-
-interface PaddleEvent {
-  name: string
-  data?: { status?: string; customer?: { email?: string } }
-}
-
-// ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
@@ -112,60 +85,16 @@ function FeatureItem({ text, muted = false }: { text: string; muted?: boolean })
 }
 
 // ---------------------------------------------------------------------------
-// Hook: load Paddle.js once
-// ---------------------------------------------------------------------------
-
-function usePaddle(onSuccess: () => void) {
-  const ready = useRef(false)
-
-  useEffect(() => {
-    if (ready.current || typeof window === 'undefined') return
-
-    const clientToken = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN
-    if (!clientToken) return
-
-    const existing = document.getElementById('paddle-js')
-    if (existing) {
-      initPaddle(clientToken, onSuccess)
-      ready.current = true
-      return
-    }
-
-    const script = document.createElement('script')
-    script.id = 'paddle-js'
-    script.src = 'https://cdn.paddle.com/paddle/v2/paddle.js'
-    script.async = true
-    script.onload = () => {
-      initPaddle(clientToken, onSuccess)
-      ready.current = true
-    }
-    document.head.appendChild(script)
-  }, [onSuccess])
-}
-
-function initPaddle(token: string, onSuccess: () => void) {
-  if (!window.Paddle) return
-  window.Paddle.Environment.set('sandbox')
-  window.Paddle.Initialize({
-    token,
-    eventCallback(e: PaddleEvent) {
-      if (e.name === 'checkout.completed') {
-        onSuccess()
-      }
-    },
-  })
-}
-
-// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
 export default function UpgradePage() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const [annual, setAnnual] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(searchParams.get('paddle_status') === 'success')
+  const [loading] = useState(false)
+  const [error] = useState<string | null>(null)
+  const success = searchParams.get('paddle_status') === 'success'
 
   const session = getSession()
   const currentPlan = session?.plan ?? 'free'
@@ -180,34 +109,9 @@ export default function UpgradePage() {
   const proLabel = annual ? `$${proPrice}/month billed annually` : `$${proPrice}/month`
   const bizLabel = annual ? `$${bizPrice}/seat/month billed annually` : `$${bizPrice}/seat/month`
 
-  function handleSuccess() {
-    updateUser({ plan: 'pro' })
-    setSuccess(true)
-    setLoading(false)
-  }
-
-  usePaddle(handleSuccess)
-
-  async function handleUpgradePro() {
-    setLoading(true)
-    setError(null)
-    try {
-      const priceId = process.env.NEXT_PUBLIC_PADDLE_PRICE_ID_PRO
-      if (!priceId) throw new Error('Pro price not configured')
-
-      if (!window.Paddle) throw new Error('Paddle.js not loaded yet — try again')
-
-      const email = session?.email
-      window.Paddle.Checkout.open({
-        items: [{ priceId, quantity: 1 }],
-        ...(email ? { customer: { email } } : {}),
-        customData: email ? { user_email: email } : {},
-      })
-      setLoading(false)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong')
-      setLoading(false)
-    }
+  function handleUpgradePro() {
+    // Full-page branded checkout — Paddle's inline iframe renders inside it.
+    router.push('/checkout?plan=pro')
   }
 
   return (

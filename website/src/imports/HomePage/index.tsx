@@ -138,7 +138,7 @@ function Navbar() {
           </a>
           <a
             href="#downloads"
-            className="bg-gradient-to-r from-[#00E5FF] to-[#7C4DFF] text-white font-bold text-[14px] px-4 py-2 rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap"
+            className="bg-[#3364db] text-white font-bold text-[14px] px-4 py-2 rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap"
           >
             Download
           </a>
@@ -177,7 +177,7 @@ function Navbar() {
             </a>
             <a
               href="#downloads"
-              className="bg-gradient-to-r from-[#00E5FF] to-[#7C4DFF] text-white font-bold text-[14px] px-4 py-2.5 rounded-lg text-center"
+              className="bg-[#3364db] text-white font-bold text-[14px] px-4 py-2.5 rounded-lg text-center"
               onClick={() => setMobileOpen(false)}
             >
               Download
@@ -226,7 +226,7 @@ function AppWindowMockup() {
             <span
               key={t}
               className={`text-[12px] px-3 py-1 rounded-md font-medium ${
-                i === 0 ? "bg-gradient-to-r from-[#00E5FF] to-[#7C4DFF] text-white" : "text-[#9198b7]"
+                i === 0 ? "bg-[#3364db] text-white" : "text-[#9198b7]"
               }`}
             >
               {t}
@@ -274,7 +274,7 @@ function AppWindowMockup() {
       ))}
       <div className="flex items-center justify-between gap-3 px-3 sm:px-5 py-3">
         <span className="text-[11px] sm:text-[12px] text-[#9198b7] truncate">5 files ready to organize</span>
-        <button className="flex items-center gap-1.5 bg-gradient-to-r from-[#00E5FF] to-[#7C4DFF] text-white text-[12px] sm:text-[13px] font-bold px-3 sm:px-4 py-1.5 rounded-lg hover:opacity-90 transition-opacity shrink-0">
+        <button className="flex items-center gap-1.5 bg-[#3364db] text-white text-[12px] sm:text-[13px] font-bold px-3 sm:px-4 py-1.5 rounded-lg hover:opacity-90 transition-opacity shrink-0">
           <span className="hidden sm:inline">Organize 5 Files</span>
           <span className="sm:hidden">Organize</span>
           <ArrowRight size={14} />
@@ -326,7 +326,7 @@ function Hero() {
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-wrap justify-center">
               <a
                 href="#demo"
-                className="bg-gradient-to-r from-[#00E5FF] to-[#7C4DFF] text-white font-bold text-[15px] sm:text-[16px] px-7 py-3.5 rounded-xl text-center transition-all duration-200 hover:opacity-90 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[#00E5FF]/20"
+                className="bg-[#3364db] text-white font-bold text-[15px] sm:text-[16px] px-7 py-3.5 rounded-xl text-center transition-all duration-200 hover:bg-[#2a55c0] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[#3364db]/30"
               >
                 Try Online Demo
               </a>
@@ -527,7 +527,7 @@ function Downloads() {
                 href={o.href}
                 className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-[15px] font-bold transition-all ${
                   o.primary
-                    ? "bg-gradient-to-r from-[#00E5FF] to-[#7C4DFF] text-white hover:opacity-90"
+                    ? "bg-[#3364db] text-white hover:opacity-90"
                     : "bg-[#1d2440] text-[#bec2d3] hover:bg-[#232b50] border border-[#3c4561]"
                 }`}
               >
@@ -602,7 +602,7 @@ function Demo() {
               </div>
               <a
                 href="#"
-                className="bg-gradient-to-r from-[#00E5FF] to-[#7C4DFF] text-white font-bold text-[15px] px-8 py-3 rounded-xl hover:opacity-90 transition-opacity flex items-center gap-2"
+                className="bg-[#3364db] text-white font-bold text-[15px] px-8 py-3 rounded-xl hover:opacity-90 transition-opacity flex items-center gap-2"
               >
                 Launch Demo <ArrowRight size={16} />
               </a>
@@ -1132,7 +1132,7 @@ function Support() {
                 className="bg-[#171c2f] border border-[#3c4561] rounded-xl px-4 py-2.5 text-[14px] text-[#edeef3] placeholder-[#9198b7] focus:outline-none focus:border-[#00E5FF] transition-colors resize-none"
               />
             </div>
-            <button className="bg-gradient-to-r from-[#00E5FF] to-[#7C4DFF] text-white font-bold text-[15px] py-3 rounded-xl hover:opacity-90 transition-opacity">
+            <button className="bg-[#3364db] text-white font-bold text-[15px] py-3 rounded-xl hover:opacity-90 transition-opacity">
               Send Message
             </button>
           </div>
