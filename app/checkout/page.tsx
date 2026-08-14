@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import CheckoutPage from '@/components/checkout/checkout-page'
-import { getSession, updateUser } from '@/lib/session'
+import { getSession } from '@/lib/session'
 
 const PLANS = {
   pro: {
@@ -84,9 +84,9 @@ function CheckoutRoute() {
       fallbackPrice={plan.price}
       interval={plan.interval}
       onSuccess={() => {
-        // Optimistic only — the Paddle webhook is the source of truth and
-        // will set the real plan server-side.
-        updateUser({ plan: planKey })
+        // Deliberately does NOT set the plan locally. The webhook is the only
+        // thing that can grant it; /upgrade polls the server until it lands and
+        // shows an "activating…" state meanwhile.
         router.push('/upgrade?paddle_status=success')
       }}
       onBack={() => router.push('/upgrade')}

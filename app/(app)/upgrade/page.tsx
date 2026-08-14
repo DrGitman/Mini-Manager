@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Check, Loader2, Sparkles, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -13,7 +13,8 @@ import {
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
-import { getSession } from '@/lib/session'
+import { apiGetProfile } from '@/lib/api'
+import { useSession, updateUser } from '@/lib/session'
 
 // ---------------------------------------------------------------------------
 // Data
@@ -94,10 +95,44 @@ export default function UpgradePage() {
   const [annual, setAnnual] = useState(false)
   const [loading] = useState(false)
   const [error] = useState<string | null>(null)
-  const success = searchParams.get('paddle_status') === 'success'
 
-  const session = getSession()
+  // Live session — the app shell keeps this in sync with GET /profile.
+  const session = useSession()
   const currentPlan = session?.plan ?? 'free'
+
+  // Returning from checkout: the payment succeeded in the browser, but the plan
+  // isn't real until Paddle's webhook reaches the server. Poll until it does
+  // rather than claiming success off the back of a URL parameter.
+  const justPaid = searchParams.get('paddle_status') === 'success'
+  const [activation, setActivation] = useState<'idle' | 'pending' | 'timeout'>(
+    justPaid ? 'pending' : 'idle',
+  )
+  const success = currentPlan !== 'free'
+
+  useEffect(() => {
+    if (!justPaid || success) return
+    let cancelled = false
+    const started = Date.now()
+
+    async function poll() {
+      while (!cancelled && Date.now() - started < 60_000) {
+        try {
+          const p = await apiGetProfile()
+          if (p.plan !== 'free') {
+            updateUser({ plan: p.plan as 'free' | 'pro' | 'business' })
+            if (!cancelled) setActivation('idle')
+            return
+          }
+        } catch {
+          // keep polling — a transient failure shouldn't end activation
+        }
+        await new Promise(r => setTimeout(r, 3000))
+      }
+      if (!cancelled) setActivation('timeout')
+    }
+    poll()
+    return () => { cancelled = true }
+  }, [justPaid, success])
 
   const proMonthly = 19
   const proAnnual  = 13
@@ -122,11 +157,31 @@ export default function UpgradePage() {
         <p className="text-muted-foreground mt-2">Unlock unlimited AI organization.</p>
       </div>
 
-      {/* Success banner */}
+      {/* Confirmed by the server — currentPlan comes from GET /profile. */}
       {success && (
         <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-green-800 text-sm font-medium">
           <Check className="h-4 w-4 shrink-0" />
-          You&apos;re now on Pro! Enjoy unlimited AI organization.
+          You&apos;re now on {currentPlan === 'business' ? 'Business' : 'Pro'}! Enjoy unlimited AI
+          organization.
+        </div>
+      )}
+
+      {/* Paid, but the webhook hasn't activated the plan yet. */}
+      {!success && activation === 'pending' && (
+        <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-blue-900 text-sm font-medium">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+          Payment received — activating your plan. This usually takes a few seconds.
+        </div>
+      )}
+
+      {!success && activation === 'timeout' && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900 text-sm">
+          <p className="font-medium">Your payment went through, but the plan hasn&apos;t activated yet.</p>
+          <p className="mt-1">
+            This clears itself once our billing webhook is processed. If it hasn&apos;t updated in a
+            few minutes, contact <span className="font-medium">support@minimanager.app</span> and
+            we&apos;ll sort it out — you will not be charged twice.
+          </p>
         </div>
       )}
 
