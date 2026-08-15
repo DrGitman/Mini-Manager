@@ -8,6 +8,7 @@ import time
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from ..config import settings
 from ..middleware.auth import get_current_user
 from ..models.schemas import ClassificationResult, ClassifyRequest, ClassifyResponse
 from ..services import cache as cache_svc
@@ -180,7 +181,7 @@ async def classify_files(
             """,
             user_id,
             f'{{"files": {len(files)}, "folder": "{body.root_folder_name}"}}',
-            "llama-3.3-70b-versatile",
+            settings.groq_model,
             f"Classified {len(all_results)} files ({ai_calls} AI calls, {len(cache_hits)} cache hits, {len(heuristic_results)} heuristic). {sensitive_count} sensitive files flagged.",
             latency_ms,
         )

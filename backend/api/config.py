@@ -30,6 +30,10 @@ class Settings(BaseSettings):
 
     # Groq (main classify engine)
     groq_api_key: str
+    # Single source of truth for the Groq model. llama-3.3-70b-versatile was
+    # decommissioned 2026-08-16; gpt-oss-120b is Groq's recommended replacement
+    # (same 131k context, JSON mode supported). Override with GROQ_MODEL.
+    groq_model: str = "openai/gpt-oss-120b"
 
     # JWT
     jwt_secret: str

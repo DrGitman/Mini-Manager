@@ -19,15 +19,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["support"])
 
 _GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions"
-_GROQ_MODEL = "llama-3.3-70b-versatile"
+_GROQ_MODEL = settings.groq_model
 
 _SUPPORT_SYSTEM = """\
 You are the Mini Manager support agent. You handle support queries autonomously.
 
 Mini Manager is a desktop + web AI file organiser. Key facts:
-- Classifies files using AI (Groq llama-3.3-70b)
+- Classifies files using AI (Groq)
 - Runs on Windows desktop (Electron) and web browser
-- Plans: Free (basic), Pro ($9/mo — unlimited scans, rules, priority support)
+- Plans: Free (basic), Pro ($19/mo — unlimited scans, rules, priority support)
 - Undo is always free, on every plan, forever
 - File contents never leave the user's device — only metadata is processed
 - Files are sent to Recycle Bin, never permanently deleted

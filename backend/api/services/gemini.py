@@ -1,6 +1,6 @@
 """
 Hybrid AI service:
-  - Groq (llama-3.3-70b) via httpx  → classify_batch  (batch, fast, free)
+  - Groq (model from settings.groq_model) via httpx → classify_batch (batch, fast)
   - Gemini 2.0 Flash                 → explain_file    (Google Cloud requirement)
 """
 
@@ -21,7 +21,7 @@ from .db import get_pool
 
 logger = logging.getLogger(__name__)
 
-_GROQ_MODEL    = "llama-3.3-70b-versatile"
+_GROQ_MODEL    = settings.groq_model
 _GEMINI_MODEL  = "gemini-flash-lite-latest"
 _GROQ_URL      = "https://api.groq.com/openai/v1/chat/completions"
 
@@ -145,7 +145,7 @@ async def classify_batch(
     existing_folders: Optional[list] = None,
     corrections_hint: str = "",
 ) -> tuple[list[ClassificationResult], TokenUsage]:
-    """Classify files using Groq llama-3.3-70b via httpx."""
+    """Classify files using the configured Groq model via httpx."""
     if not files:
         return [], TokenUsage()
 

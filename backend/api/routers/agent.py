@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["agent"])
 
 _GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions"
-_GROQ_MODEL = "llama-3.3-70b-versatile"
+_GROQ_MODEL = settings.groq_model
 
 # ─── Prompts ──────────────────────────────────────────────────────────────────
 
