@@ -3,7 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/png" href="/logo-blue-icon.png" />
+    <!-- favicon.ico first: browsers request /favicon.ico by default, so having a
+         real one means the icon still shows if the tags are ignored or cached out. -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="apple-touch-icon" href="/logo-blue-icon.png" />
     <title>Mini Manager</title>
     <meta name="description" content="Mini Manager scans any folder, classifies every file with AI, and auto-organizes them — with confidence scores, sensitivity detection, and full undo history." />
