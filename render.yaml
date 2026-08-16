@@ -1,0 +1,79 @@
+# Render blueprint for the Mini Manager backend.
+#
+# Deploy: Render dashboard → New → Blueprint → pick this repo.
+# Secrets are marked sync:false so Render prompts for them instead of storing
+# them in git.
+#
+# Note the rootDir: the app must start from `mini-manager-app` so that
+# `backend.api.main` resolves — starting inside backend/api breaks the imports.
+
+services:
+  - type: web
+    name: mini-manager-api
+    runtime: python
+    plan: free
+    region: frankfurt          # closest Render region to Namibia
+    buildCommand: pip install -r backend/api/requirements.txt
+    # Render supplies $PORT; binding to it is required or the deploy is marked unhealthy.
+    startCommand: uvicorn backend.api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health          # defined at the app root, not under /api/v1
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.5"
+      - key: ENVIRONMENT
+        value: production
+
+      # ── Required secrets — Render will prompt for these ──────────────────
+      - key: DATABASE_URL          # Neon connection string
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: JWT_SECRET            # long random string
+        sync: false
+
+      # ── Frontend origin, for CORS ────────────────────────────────────────
+      - key: FRONTEND_URL          # e.g. https://mini-manager.vercel.app
+        sync: false
+      - key: EXTRA_CORS_ORIGINS    # optional, comma-separated
+        sync: false
+
+      # ── Paddle ───────────────────────────────────────────────────────────
+      # Webhook destination once deployed:
+      #   https://<this-service>.onrender.com/api/v1/webhooks/paddle
+      - key: PADDLE_WEBHOOK_SECRET # pdl_ntfset_... — required in production
+        sync: false
+      - key: PADDLE_SANDBOX_API_KEY
+        sync: false
+      - key: PADDLE_PRICE_ID_PRO
+        sync: false
+
+  # ── Frontend (Next.js) ─────────────────────────────────────────────────────
+  - type: web
+    name: mini-manager-web
+    runtime: node
+    plan: free
+    region: frankfurt
+    # corepack enables pnpm — this project uses pnpm, and npm cannot install it.
+    buildCommand: corepack enable && pnpm install && pnpm build
+    # `next start` reads $PORT from the environment and binds 0.0.0.0 already.
+    startCommand: pnpm start
+    envVars:
+      - key: NODE_VERSION
+        value: "22.20.0"
+
+      # Backend origin. Fill in after the API service deploys, e.g.
+      # https://mini-manager-api.onrender.com — used by both the API proxy
+      # and the Content-Security-Policy.
+      - key: API_URL
+        sync: false
+
+      # NEXT_PUBLIC_* values are baked in at build time, so changing one
+      # requires a redeploy, not just a restart.
+      - key: NEXT_PUBLIC_PADDLE_CLIENT_TOKEN
+        sync: false
+      - key: NEXT_PUBLIC_PADDLE_PRICE_ID_PRO
+        sync: false
+      - key: NEXT_PUBLIC_PADDLE_ENV
+        value: sandbox

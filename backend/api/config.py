@@ -27,6 +27,10 @@ class Settings(BaseSettings):
 
     # Gemini (Google Cloud — hackathon requirement, used for explain)
     gemini_api_key: str
+    # Single source of truth for the Gemini model. Prefer a "-latest" alias:
+    # pinned versions get decommissioned (gemini-2.0-flash died 2026-08) and the
+    # alias keeps tracking a supported model. Override with GEMINI_MODEL.
+    gemini_model: str = "gemini-flash-lite-latest"
 
     # Groq (main classify engine)
     groq_api_key: str
@@ -40,6 +44,9 @@ class Settings(BaseSettings):
 
     # CORS
     frontend_url: str = "https://mini-manager.vercel.app"
+    # Comma-separated extra origins allowed to call the API (preview deploys,
+    # custom domains). Leave empty for local development.
+    extra_cors_origins: str = ""
 
     # Optional
     environment: str = "production"

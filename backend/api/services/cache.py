@@ -10,6 +10,7 @@ import hashlib
 
 from ..models.schemas import ClassificationResult, FileItem
 from .db import get_pool
+from .heuristics import detect_sensitivity
 
 
 def _fingerprint(file: FileItem) -> str:
@@ -47,6 +48,14 @@ async def lookup_cache(files: list[FileItem]) -> tuple[
     for row in rows:
         fp = row["fingerprint"]
         file = fp_to_file[fp]
+
+        # The cache table stores no sensitivity column, so a cache hit used to
+        # come back as sensitivity="none" — permanently unflagging anything
+        # sensitive that had been scanned once. Treat sensitive files as misses
+        # so they always get a fresh AI review, same as the heuristic path.
+        if detect_sensitivity(file.name) != "none":
+            continue
+
         hit_fps.add(fp)
         hits.append(
             ClassificationResult(

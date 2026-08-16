@@ -22,7 +22,7 @@ from .db import get_pool
 logger = logging.getLogger(__name__)
 
 _GROQ_MODEL    = settings.groq_model
-_GEMINI_MODEL  = "gemini-flash-lite-latest"
+_GEMINI_MODEL  = settings.gemini_model
 _GROQ_URL      = "https://api.groq.com/openai/v1/chat/completions"
 
 # ─── Gemini client (lazy) ─────────────────────────────────────────────────────

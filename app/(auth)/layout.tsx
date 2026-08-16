@@ -75,9 +75,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <Image
             src="/logo-white-full.png"
             alt="Mini Manager"
-            width={130}
-            height={44}
-            className="object-contain"
+            width={371}
+            height={237}
+            className="h-10 w-auto object-contain"
             priority
           />
         </div>

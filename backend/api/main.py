@@ -80,13 +80,21 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # ─── Middleware (order: outermost first) ──────────────────────────────────────
 
+# Local dev origins, plus whatever FRONTEND_URL points at. For extra hosted
+# origins (preview deploys, a custom domain) set EXTRA_CORS_ORIGINS to a
+# comma-separated list rather than hardcoding them here — a stale hardcoded
+# tunnel URL is what used to sit in this list.
 _origins = [
     "http://localhost:3000",
     "http://localhost:3001",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:3001",
+    # The packaged desktop app serves its bundled Next build on 3333
+    # (electron/main.js). Without these the installed .exe is CORS-blocked.
+    "http://localhost:3333",
+    "http://127.0.0.1:3333",
     settings.frontend_url,
-    "https://fca2-197-234-87-243.ngrok-free.app",
+    *[o.strip() for o in settings.extra_cors_origins.split(",") if o.strip()],
 ]
 
 app.add_middleware(

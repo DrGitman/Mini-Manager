@@ -54,6 +54,29 @@ async function maybeRefresh(): Promise<void> {
   await _refreshPromise
 }
 
+// ─── Expired session handling ─────────────────────────────────────────────────
+
+let _redirectingToLogin = false
+
+/**
+ * Clear the dead session and send the user to sign in — once.
+ * Guarded because several pollers can 401 in the same tick.
+ */
+function handleSessionExpired(): void {
+  if (typeof window === 'undefined' || _redirectingToLogin) return
+  _redirectingToLogin = true
+  try {
+    localStorage.removeItem('mm.session')
+    localStorage.removeItem('mm.token')
+    sessionStorage.removeItem('mm.session')
+    sessionStorage.removeItem('mm.token')
+  } catch {
+    // storage unavailable — redirect anyway
+  }
+  const onAuthPage = /\/(login|signup|forgot-password)/.test(window.location.pathname)
+  if (!onAuthPage) window.location.href = '/login?expired=1'
+}
+
 // ─── Core request helper ──────────────────────────────────────────────────────
 
 async function request<T>(
@@ -82,7 +105,16 @@ async function request<T>(
         ? `Backend error (${res.status}): is the API server running on port 8000?`
         : `HTTP ${res.status}: no response body`
     }
-    console.error('API error', res.status, path, msg)
+
+    // A dead session used to leave the app polling forever, spamming 401s to
+    // both the console and the server and never sending the user anywhere.
+    // The refresh endpoint is exempt: its own 401 is what tells us the session
+    // is unrecoverable, and handling it here would recurse.
+    if (res.status === 401 && !path.includes('/auth/refresh')) {
+      handleSessionExpired()
+    } else {
+      console.error('API error', res.status, path, msg)
+    }
     throw new Error(msg)
   }
   return res.json() as Promise<T>

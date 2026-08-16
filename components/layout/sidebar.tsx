@@ -84,12 +84,15 @@ export function Sidebar({ user }: SidebarProps) {
     <aside className="flex h-full w-56 flex-col bg-sidebar border-r border-border">
       {/* Logo */}
       <div className="px-4 pt-5 pb-5">
+        {/* Intrinsic size is the file's real 457x283. Passing a mismatched
+            box (130x44) and then sizing with CSS is what triggers Next's
+            aspect-ratio warning — let height drive it and width follow. */}
         <Image
           src="/logo-dark_blue-full.png"
           alt="Mini Manager"
-          width={130}
-          height={44}
-          className="object-contain object-left"
+          width={457}
+          height={283}
+          className="h-10 w-auto object-contain object-left"
           priority
         />
       </div>

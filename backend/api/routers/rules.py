@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 
+from ..config import settings
 from ..middleware.auth import get_current_user
 from ..services.db import get_pool
 from ..services import gemini as gemini_svc
@@ -189,7 +190,7 @@ Return ONLY the JSON, no markdown fences, no extra text."""
     try:
         client = gemini_svc._get_gemini()
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model=settings.gemini_model,
             contents=prompt,
         )
         text = response.text.strip()

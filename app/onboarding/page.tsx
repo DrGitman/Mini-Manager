@@ -80,7 +80,7 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
   return (
     <div className="flex flex-col items-center gap-6 px-2 py-4 text-center">
       {/* Logo */}
-      <Image src="/logo-dark_blue-full.png" alt="Mini Manager" width={120} height={40} className="object-contain" />
+      <Image src="/logo-dark_blue-full.png" alt="Mini Manager" width={457} height={283} className="h-10 w-auto object-contain" />
 
       {/* Heading */}
       <div className="flex flex-col gap-2">
