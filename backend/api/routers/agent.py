@@ -94,8 +94,17 @@ When no action needed (e.g. answering a question about files):
   "task": null
 }
 
+CONVERSATION RULES (check these FIRST, before anything else):
+- If the user is greeting you ("hi", "hello", "hey"), thanking you, saying goodbye, or making
+  small talk, reply in ONE short friendly sentence and stop. Do NOT list files. Do NOT emit a
+  task. Do NOT mention the FILE CONTEXT. A greeting is not a request to do anything.
+- If the user asks what you can do, describe your abilities briefly. Do not list their files.
+- Only read the FILE CONTEXT when the user actually asks about their files or requests a
+  file operation. Its presence is NOT itself a request — it is background information that is
+  attached to every message whether it is relevant or not.
+
 FILE CONTEXT RULES:
-- If a FILE CONTEXT block is present in the user message, use it to answer questions about what files exist.
+- If a FILE CONTEXT block is present, use it to answer questions about what files exist.
 - When asked to filter or find files by TOPIC (e.g. "school files", "work files", "photos from last year"):
   → Use semantic reasoning on file names to decide relevance. DO NOT list every file.
   → "school files": look for keywords like Assessment, Assignment, Exam, Quiz, Course, Lecture, Study, Research, Thesis, Essay, Report (academic), University, College, Module, Grade, Submission, Academic paper names (author_title.pdf), textbook names
@@ -347,16 +356,25 @@ async def agent_chat(
                 lines.append(f"  ... {len(files) - 200} more files not shown")
         context_parts.append("\n".join(lines))
 
+    # Keep the file listing OUT of the user's own message. Gluing it on made a
+    # bare "Hello" arrive as hundreds of lines of filenames followed by one word,
+    # and the model answered the file listing instead of the greeting.
+    llm_messages: list[dict] = [{"role": "system", "content": _GEMINI_SYSTEM}]
     if context_parts:
-        messages[-1]["content"] = "\n\n".join(context_parts) + "\n\n" + messages[-1]["content"]
+        llm_messages.append({
+            "role": "system",
+            "content": (
+                "Background information about the user's files. This is attached to every "
+                "message automatically — it is not a request. Only use it if the user's "
+                "actual message asks about files.\n\n" + "\n\n".join(context_parts)
+            ),
+        })
+    llm_messages.extend(messages)
 
     steps: list[AgentStep] = []
 
     # ── Phase 1: Groq understands + emits typed operations ────────────────────
-    groq_data = await _call_groq([
-        {"role": "system", "content": _GEMINI_SYSTEM},
-        *messages,
-    ])
+    groq_data = await _call_groq(llm_messages)
 
     reply = groq_data.get("reply", "")
     needs_clarification = bool(groq_data.get("needs_clarification", False))

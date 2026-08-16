@@ -13,6 +13,45 @@ from typing import Optional
 
 from ..models.schemas import ClassificationResult, FileItem
 
+# ─── Sensitivity detection ───────────────────────────────────────────────────
+# Heuristic results never reach the AI, so without this a file like
+# "passport_scan.jpg" would be filed as an ordinary image with no warning.
+# Ordered most-specific first; the first match wins.
+
+_SENSITIVITY_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    ("identity", re.compile(
+        r"\b(passport|national[\s_-]?id|identity[\s_-]?card|id[\s_-]?card|"
+        r"drivers?[\s_-]?licen[cs]e|birth[\s_-]?certificate|social[\s_-]?security|"
+        r"\bssn\b|visa[\s_-]?application|residence[\s_-]?permit)\b",
+        re.IGNORECASE)),
+    ("financial", re.compile(
+        r"\b(bank[\s_-]?statement|payslip|pay[\s_-]?stub|salary|tax[\s_-]?return|"
+        r"\bw2\b|\bp60\b|irs|invoice|receipt|credit[\s_-]?card|iban|swift|"
+        r"account[\s_-]?statement|insurance[\s_-]?policy|mortgage|loan[\s_-]?agreement)\b",
+        re.IGNORECASE)),
+    ("personal", re.compile(
+        r"\b(medical|health[\s_-]?record|prescription|diagnosis|contract|"
+        r"will[\s_-]?and[\s_-]?testament|confidential|private|password|"
+        r"recovery[\s_-]?codes?|secret)\b",
+        re.IGNORECASE)),
+]
+
+
+def detect_sensitivity(name: str) -> str:
+    """
+    Classify a filename as identity / financial / personal, else 'none'.
+
+    The name is normalised first: `_`, `-` and `.` are word characters as far as
+    regex `\\b` is concerned, so "passport_scan.jpg" would not match `\\bpassport\\b`
+    without this.
+    """
+    normalised = re.sub(r"[_\-.]+", " ", name)
+    for label, pattern in _SENSITIVITY_PATTERNS:
+        if pattern.search(normalised):
+            return label
+    return "none"
+
+
 # ─── Extension → category/folder ─────────────────────────────────────────────
 
 _EXT_MAP: dict[str, tuple[str, str]] = {
@@ -128,6 +167,13 @@ def run_heuristics(
     for file in files:
         ext = file.extension.lower()
         stem = file.name
+        sensitivity = detect_sensitivity(stem)
+
+        # A sensitive file must never be silently fast-pathed — send it to the
+        # AI so it gets a proper review and an explicit flag.
+        if sensitivity != "none":
+            ambiguous.append(file)
+            continue
 
         # 1. Keyword hints take priority (can override extension category)
         matched_hint: Optional[_KeywordHint] = None

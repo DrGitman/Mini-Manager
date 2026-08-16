@@ -120,12 +120,30 @@ _PLAN_MAP = {
 
 
 def _verify_signature(body: bytes, ts: str, h1: str) -> bool:
-    """Verify Paddle webhook signature (HMAC-SHA256)."""
+    """
+    Verify the Paddle webhook signature (HMAC-SHA256).
+
+    Fails CLOSED when the secret is missing. This endpoint grants paid plans, so
+    accepting unsigned requests would let anyone who finds the URL upgrade
+    themselves for free. Only a local dev run is allowed to skip the check.
+    """
     secret = settings.paddle_webhook_secret
     if not secret:
-        # Webhook secret not set — skip verification in development
-        logger.warning("PADDLE_WEBHOOK_SECRET not set — skipping signature check")
-        return True
+        if settings.environment.lower() in ("development", "dev", "local"):
+            logger.warning(
+                "PADDLE_WEBHOOK_SECRET not set — skipping signature check (development only)"
+            )
+            return True
+        logger.error(
+            "PADDLE_WEBHOOK_SECRET is not set; rejecting webhook. "
+            "Set it to the secret of your Paddle notification destination."
+        )
+        return False
+
+    if not ts or not h1:
+        logger.warning("Paddle webhook missing ts/h1 in Paddle-Signature header")
+        return False
+
     signed_payload = f"{ts}:{body.decode()}"
     expected = hmac.new(
         secret.encode(), signed_payload.encode(), hashlib.sha256

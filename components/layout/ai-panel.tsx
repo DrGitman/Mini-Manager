@@ -19,10 +19,65 @@ import { getSession } from '@/lib/session'
 const eAPI = typeof window !== 'undefined' ? (window as any).electronAPI : undefined
 const isElectron = !!eAPI?.isElectron
 
+// Minimal Web Speech API types — TypeScript's DOM lib doesn't ship them, which
+// is why SpeechRecognition/SpeechRecognitionEvent were unresolved names here.
+interface SpeechRecognitionAlternative { transcript: string; confidence: number }
+interface SpeechRecognitionResultLike {
+  readonly length: number
+  readonly isFinal: boolean
+  [index: number]: SpeechRecognitionAlternative
+}
+interface SpeechRecognitionResultListLike {
+  readonly length: number
+  [index: number]: SpeechRecognitionResultLike
+}
+interface SpeechRecognitionEventLike extends Event {
+  readonly resultIndex: number
+  readonly results: SpeechRecognitionResultListLike
+}
+interface SpeechRecognitionErrorEventLike extends Event {
+  readonly error: string
+  readonly message: string
+}
+interface SpeechRecognitionLike {
+  lang: string
+  continuous: boolean
+  interimResults: boolean
+  start(): void
+  stop(): void
+  abort(): void
+  onstart: (() => void) | null
+  onend: (() => void) | null
+  onresult: ((e: SpeechRecognitionEventLike) => void) | null
+  onerror: ((e: SpeechRecognitionErrorEventLike) => void) | null
+}
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike
+
 declare global {
   interface Window {
-    SpeechRecognition: typeof SpeechRecognition
-    webkitSpeechRecognition: typeof SpeechRecognition
+    SpeechRecognition?: SpeechRecognitionCtor
+    webkitSpeechRecognition?: SpeechRecognitionCtor
+  }
+}
+
+/** Plain-English reason for a speech recognition failure. */
+function voiceErrorMessage(code: string): string {
+  switch (code) {
+    case 'not-allowed':
+    case 'service-not-allowed':
+      return 'Microphone access was blocked. Allow it in your browser settings and try again.'
+    case 'audio-capture':
+      return 'No microphone found. Check that one is plugged in and enabled.'
+    case 'no-speech':
+      return "Didn't catch that — try speaking again."
+    case 'network':
+      return isElectron
+        ? 'Voice input needs the browser version — the desktop app cannot reach the speech service.'
+        : 'Voice input needs an internet connection.'
+    case 'aborted':
+      return ''
+    default:
+      return `Voice input failed (${code}).`
   }
 }
 
@@ -636,12 +691,13 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
   const [thinking, setThinking] = useState(false)
   const [listening, setListening] = useState(false)
   const [voiceSupported, setVoiceSupported] = useState(false)
+  const [voiceError, setVoiceError] = useState<string | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [palette, setPalette] = useState<PaletteState | null>(null)
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const transcriptRef = useRef('')
   const scopeListingRef = useRef<FileListing[]>([])
 
@@ -703,27 +759,59 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
   }
 
   function startListening() {
+    setVoiceError(null)
     const SR = window.SpeechRecognition ?? window.webkitSpeechRecognition
-    if (!SR) return
+    if (!SR) {
+      setVoiceError(
+        isElectron
+          ? 'Voice input is only available in the browser version of Mini Manager.'
+          : 'Voice input is not supported in this browser. Try Chrome or Edge.',
+      )
+      return
+    }
+
+    let failed = false
     const recognition = new SR()
     recognition.lang = 'en-US'
     recognition.interimResults = true
     recognition.continuous = false
     recognitionRef.current = recognition
+
     recognition.onstart = () => { setListening(true); transcriptRef.current = '' }
-    recognition.onresult = (e: SpeechRecognitionEvent) => {
-      const t = Array.from(e.results).map(r => r[0].transcript).join('')
+
+    recognition.onresult = (e) => {
+      let t = ''
+      for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript
       transcriptRef.current = t
       setInput(t)
     }
+
     recognition.onend = () => {
       setListening(false)
       recognitionRef.current = null
+      if (failed) return // don't send a half transcript after an error
       const t = transcriptRef.current.trim()
       if (t) { transcriptRef.current = ''; setInput(''); sendMessage(t) }
     }
-    recognition.onerror = () => { setListening(false); recognitionRef.current = null }
-    recognition.start()
+
+    // Previously swallowed the error entirely, so a blocked mic looked like
+    // nothing happening at all.
+    recognition.onerror = (e) => {
+      failed = true
+      setListening(false)
+      recognitionRef.current = null
+      const msg = voiceErrorMessage(e?.error ?? 'unknown')
+      if (msg) setVoiceError(msg)
+    }
+
+    try {
+      recognition.start()
+    } catch {
+      failed = true
+      setListening(false)
+      recognitionRef.current = null
+      setVoiceError('Could not start voice input. Try again.')
+    }
   }
 
   function stopListening() { recognitionRef.current?.stop(); setListening(false) }
@@ -886,19 +974,37 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
             className="max-h-[200px] flex-1 resize-none bg-transparent px-2 py-1.5 text-[15px] leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none"
           />
           <div className="flex items-center gap-1 shrink-0">
-            {voiceSupported && (
-              <button onClick={() => listening ? stopListening() : startListening()}
-                className={cn('flex size-9 items-center justify-center rounded-xl transition-colors',
-                  listening ? 'bg-red-500 text-white' : 'text-muted-foreground hover:bg-accent hover:text-foreground')}>
-                {listening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
-              </button>
-            )}
+            {/* Shown even when unsupported, so clicking explains why rather than
+                the button silently not existing. */}
+            <button
+              onClick={() => (listening ? stopListening() : startListening())}
+              title={voiceSupported ? (listening ? 'Stop recording' : 'Voice input') : 'Voice input unavailable'}
+              aria-label={listening ? 'Stop recording' : 'Start voice input'}
+              className={cn('flex size-9 items-center justify-center rounded-xl transition-colors',
+                listening
+                  ? 'bg-red-500 text-white'
+                  : voiceSupported
+                  ? 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                  : 'text-muted-foreground/40 hover:bg-accent hover:text-muted-foreground')}>
+              {listening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+            </button>
             <button onClick={() => sendMessage()} disabled={!input.trim() || thinking}
               className="flex size-9 items-center justify-center rounded-xl bg-primary text-white disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground hover:bg-primary/90 transition-all">
               <SendHorizonal className="size-4" />
             </button>
           </div>
         </div>
+        {voiceError && (
+          <p className="mt-2 flex items-start gap-1.5 text-center text-xs text-destructive justify-center">
+            <span>{voiceError}</span>
+            <button onClick={() => setVoiceError(null)} className="underline underline-offset-2 shrink-0">
+              dismiss
+            </button>
+          </p>
+        )}
+        {listening && (
+          <p className="mt-2 text-center text-xs text-muted-foreground">Listening… speak now</p>
+        )}
         {palette ? (
           <p className="mt-2 text-center text-xs text-muted-foreground">
             <kbd className="font-sans">↑</kbd> <kbd className="font-sans">↓</kbd> navigate · <kbd className="font-sans">Enter</kbd> select · number keys jump

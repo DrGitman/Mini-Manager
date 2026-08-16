@@ -3,7 +3,7 @@
  * Loads the Next.js app and provides native file-system IPC handlers.
  */
 
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeImage } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeImage, session } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const crypto = require('crypto')
@@ -108,6 +108,16 @@ app.on('open-url', (event, url) => {
 // ─── App lifecycle ────────────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
+  // Electron denies media permission by default, which blocks the microphone
+  // before voice input can even start. Allow only what the app actually needs.
+  const ALLOWED_PERMISSIONS = new Set(['media', 'audioCapture', 'clipboard-read'])
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+    callback(ALLOWED_PERMISSIONS.has(permission))
+  })
+  session.defaultSession.setPermissionCheckHandler((_wc, permission) =>
+    ALLOWED_PERMISSIONS.has(permission),
+  )
+
   // Set app icon (Windows taskbar / Linux dock)
   const appIcon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.png'))
   if (process.platform === 'linux') app.setIcon(appIcon)
