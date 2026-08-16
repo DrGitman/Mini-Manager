@@ -11,8 +11,8 @@
     "backend": "backend\\api\\.venv\\Scripts\\python.exe -m uvicorn backend.api.main:app --reload --port 8000",
     "dev:all": "concurrently --kill-others --names \"web,api\" -c \"cyan,magenta\" \"next dev\" \"pnpm backend\"",
     "electron:dev": "concurrently --kill-others \"next dev\" \"wait-on http://localhost:3000 && cross-env NODE_ENV=development electron electron/main.js\"",
-    "electron:build": "next build && electron-builder",
-    "electron:pack": "electron-builder --dir"
+    "electron:build": "next build && node scripts/prepare-standalone.mjs && electron-builder",
+    "electron:pack": "next build && node scripts/prepare-standalone.mjs && electron-builder --dir"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.55",
