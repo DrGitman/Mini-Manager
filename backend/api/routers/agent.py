@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import pathlib
@@ -10,10 +11,12 @@ from typing import Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
+from google.genai import types as genai_types
 from pydantic import BaseModel
 
 from ..config import settings
 from ..middleware.auth import get_current_user
+from ..services import gemini as gemini_svc
 from .notifications import create_notification
 
 logger = logging.getLogger(__name__)
@@ -546,6 +549,98 @@ async def _call_groq(
         return json.loads(resp.json()["choices"][0]["message"]["content"])
 
 
+# Gemini uses a different schema dialect to Groq: `nullable: true` rather than
+# `type: ["object", "null"]`. Same shape, expressed the way each provider wants.
+_AGENT_SCHEMA_GEMINI = {
+    "type": "object",
+    "properties": {
+        "intent": {"type": "string", "enum": ["chat", "question", "command"]},
+        "reply": {"type": "string"},
+        "needs_clarification": {"type": "boolean"},
+        "questions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "question": {"type": "string"},
+                    "options": {"type": "array", "items": {"type": "string"}},
+                    "type": {"type": "string"},
+                },
+                "required": ["question"],
+            },
+        },
+        "task": {
+            "type": "object",
+            "nullable": True,
+            "properties": {
+                "description": {"type": "string"},
+                "operations": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "type": {"type": "string", "enum": _OPERATION_TYPES},
+                            "source": {"type": "string", "nullable": True},
+                            "destination": {"type": "string", "nullable": True},
+                            "path": {"type": "string", "nullable": True},
+                            "new_name": {"type": "string", "nullable": True},
+                        },
+                        "required": ["type"],
+                    },
+                },
+            },
+            "required": ["description", "operations"],
+        },
+    },
+    "required": ["intent", "reply", "needs_clarification", "questions"],
+}
+
+
+async def _call_gemini_agent(messages: list[dict]) -> dict:
+    """
+    Same job as _call_groq, on Gemini.
+
+    Gemini takes the system prompt separately rather than as a message, so the
+    system entries are pulled out and the conversation is passed as contents.
+    """
+    system_parts = [m["content"] for m in messages if m["role"] == "system"]
+    convo = [m for m in messages if m["role"] != "system"]
+    transcript = "\n".join(
+        f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['content']}" for m in convo
+    )
+
+    client = gemini_svc._get_gemini()
+    response = await asyncio.to_thread(
+        lambda: client.models.generate_content(
+            model=settings.gemini_model,
+            contents=transcript or "Hello",
+            config=genai_types.GenerateContentConfig(
+                system_instruction="\n\n".join(system_parts),
+                response_mime_type="application/json",
+                response_schema=_AGENT_SCHEMA_GEMINI,
+            ),
+        )
+    )
+    return json.loads((response.text or "{}").strip())
+
+
+async def _call_agent_llm(messages: list[dict]) -> dict:
+    """
+    Gemini first, Groq as fallback.
+
+    Groq's free tier caps requests per minute, and every chat message costs one —
+    which is why a second message moments after the first came back 429. Gemini
+    carries the main path; Groq is now only resilience.
+    """
+    try:
+        return await _call_gemini_agent(messages)
+    except _PayloadTooLarge:
+        raise
+    except Exception as exc:
+        logger.warning("Gemini agent call failed (%s) — falling back to Groq", exc)
+        return await _call_groq(messages, schema=_AGENT_RESPONSE_SCHEMA)
+
+
 # ─── Schemas ──────────────────────────────────────────────────────────────────
 
 class AgentMessage(BaseModel):
@@ -687,7 +782,7 @@ async def agent_chat(
     groq_data = None
     for attempt, budget in enumerate(_CONTEXT_BUDGETS):
         try:
-            groq_data = await _call_groq(build_messages(budget), schema=_AGENT_RESPONSE_SCHEMA)
+            groq_data = await _call_agent_llm(build_messages(budget))
             break
         except _PayloadTooLarge:
             logger.warning(
@@ -724,7 +819,7 @@ async def agent_chat(
             },
         ]
         try:
-            retried = await _call_groq(retry_messages, schema=_AGENT_RESPONSE_SCHEMA)
+            retried = await _call_agent_llm(retry_messages)
             if retried.get("task"):
                 groq_data = retried
                 task = retried["task"]
