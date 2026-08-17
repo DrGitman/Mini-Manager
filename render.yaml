@@ -4,8 +4,9 @@
 # Secrets are marked sync:false so Render prompts for them instead of storing
 # them in git.
 #
-# Note the rootDir: the app must start from `mini-manager-app` so that
-# `backend.api.main` resolves — starting inside backend/api breaks the imports.
+# No rootDir: this repo's root IS mini-manager-app. Commands run from there,
+# which is required — `backend.api.main` only resolves from the repo root.
+# Starting inside backend/api breaks the relative imports.
 
 services:
   - type: web
@@ -47,6 +48,21 @@ services:
       - key: PADDLE_SANDBOX_API_KEY
         sync: false
       - key: PADDLE_PRICE_ID_PRO
+        sync: false
+
+      # ── EFT payments (Namibia) ───────────────────────────────────────────
+      # Real banking details — env only, never the repo. Without
+      # EFT_ACCOUNT_NUMBER the claim endpoint returns 503; without
+      # EFT_ADMIN_EMAIL the reconciliation dashboard is closed to everyone.
+      - key: EFT_ACCOUNT_NAME
+        sync: false
+      - key: EFT_BANK_NAME
+        sync: false
+      - key: EFT_ACCOUNT_NUMBER
+        sync: false
+      - key: EFT_BRANCH_CODE
+        sync: false
+      - key: EFT_ADMIN_EMAIL
         sync: false
 
   # ── Frontend (Next.js) ─────────────────────────────────────────────────────
