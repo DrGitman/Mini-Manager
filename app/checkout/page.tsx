@@ -83,6 +83,7 @@ function CheckoutRoute() {
       planName={plan.name}
       fallbackPrice={plan.price}
       interval={plan.interval}
+      planKey={planKey}
       onSuccess={() => {
         // Deliberately does NOT set the plan locally. The webhook is the only
         // thing that can grant it; /upgrade polls the server until it lands and

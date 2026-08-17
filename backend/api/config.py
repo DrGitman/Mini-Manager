@@ -42,6 +42,23 @@ class Settings(BaseSettings):
     # JWT
     jwt_secret: str
 
+    # ── EFT payments (Namibia) ───────────────────────────────────────────────
+    # Shown to the customer on the payment page. Set these in .env — they are
+    # real banking details and do not belong in the repo.
+    eft_account_name: str = ""
+    eft_bank_name: str = ""
+    eft_account_number: str = ""
+    eft_branch_code: str = ""
+    # Price in NAD for each plan, and how long a claim stays open.
+    eft_amount_pro: float = 349.00
+    eft_amount_business: float = 899.00
+    eft_claim_expiry_days: int = 7
+    # Proofs at or above this confidence, with all hard checks passing, are
+    # activated autonomously. Below it, the agent defers to human review.
+    eft_auto_activate_confidence: float = 0.85
+    # Account allowed to reconcile payments. Empty = admin endpoints are closed.
+    eft_admin_email: str = ""
+
     # CORS
     frontend_url: str = "https://mini-manager.vercel.app"
     # Comma-separated extra origins allowed to call the API (preview deploys,

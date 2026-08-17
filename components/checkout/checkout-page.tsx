@@ -11,6 +11,7 @@ import {
   Sparkles,
   type LucideIcon,
 } from 'lucide-react'
+import EftPayment from './eft-payment'
 
 /* ------------------------------------------------------------------ */
 /*  Theme — matches the Mini Manager sidebar                           */
@@ -53,6 +54,8 @@ export interface CheckoutPageProps {
   /** Fired on checkout.completed — provision in the webhook, not here. */
   onSuccess?: () => void
   onBack?: () => void
+  /** Which plan the EFT claim should be raised for. */
+  planKey?: string
 }
 
 /* ------------------------------------------------------------------ */
@@ -74,7 +77,9 @@ export default function CheckoutPage({
   interval = '/ month',
   onSuccess,
   onBack,
+  planKey = 'pro',
 }: CheckoutPageProps) {
+  const [method, setMethod] = useState<'eft' | 'card'>('eft')
   const [paddle, setPaddle] = useState<Paddle>()
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -255,7 +260,7 @@ export default function CheckoutPage({
           </div>
         </div>
 
-        {/* ---------------- RIGHT: Paddle inline checkout ---------------- */}
+        {/* ---------------- RIGHT: payment method ---------------- */}
         <div
           className="border-l p-8 md:p-10"
           style={{ backgroundColor: '#F8FAFC', borderColor: THEME.hairline }}
@@ -264,7 +269,38 @@ export default function CheckoutPage({
             Payment details
           </h2>
 
-          <div className="relative mt-6 min-h-[420px]">
+          {/* Namibian customers pay by instant EFT, so that leads. Card stays
+              available for everyone else. */}
+          <div
+            className="mt-5 grid grid-cols-2 gap-1 rounded-xl p-1"
+            style={{ backgroundColor: '#E8EDF5' }}
+          >
+            {(['eft', 'card'] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setMethod(m)}
+                className="rounded-lg py-2 text-sm font-semibold transition"
+                style={
+                  method === m
+                    ? { backgroundColor: THEME.surface, color: THEME.ink, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }
+                    : { color: THEME.muted }
+                }
+              >
+                {m === 'eft' ? 'Bank transfer (EFT)' : 'Card'}
+              </button>
+            ))}
+          </div>
+
+          {method === 'eft' && (
+            <div className="mt-6">
+              <EftPayment plan={planKey} />
+            </div>
+          )}
+
+          <div
+            className="relative mt-6 min-h-[420px]"
+            style={{ display: method === 'card' ? undefined : 'none' }}
+          >
             {/* skeleton while Paddle mounts */}
             {!ready && !error && (
               <div className="absolute inset-0 space-y-5">
