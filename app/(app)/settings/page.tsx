@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import {
-  Settings2, Shield, Bell, CreditCard, FolderPlus, X, Loader2, CheckCircle2, BookOpen, Plus, ToggleLeft, ToggleRight,
+  Settings2, Shield, Bell, CreditCard, FolderPlus, X, Loader2, CheckCircle2, BookOpen, Plus, ToggleLeft, ToggleRight, Pencil, Check, FolderSearch,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -21,6 +21,7 @@ import {
   apiGetConventions, apiAddConvention, apiToggleConvention, apiDeleteConvention, type Convention,
 } from '@/lib/api'
 import { usePreferences } from '@/lib/preferences-context'
+import { migrateLegacyMonitorFolders } from '@/lib/folder-digests'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ const DEFAULT_PREFS: Preferences = {
   monitor_desktop: false,
   monitor_documents: false,
   custom_folders: [],
+  quick_scan_hidden: [],
   notif_scan: true,
   notif_apply: true,
   notif_digest: false,
@@ -62,6 +64,25 @@ export default function SettingsPage() {
   // Custom folder input state
   const [showFolderInput, setShowFolderInput] = useState(false)
   const [folderInput, setFolderInput] = useState('')
+  const [folderError, setFolderError] = useState<string | null>(null)
+  const [editingFolder, setEditingFolder] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState('')
+  // Real paths from the OS. These were previously shown as
+  // C:\Users\<first word of the display name>\Downloads, which is not where
+  // most people's folders actually live.
+  const [systemPaths, setSystemPaths] = useState<{ downloads?: string; desktop?: string; documents?: string }>({})
+
+  useEffect(() => {
+    const api = typeof window !== 'undefined' ? window.electronAPI : undefined
+    if (!api?.getUserPaths) return
+    api.getUserPaths()
+      .then(p => setSystemPaths({
+        downloads: p.downloads ?? undefined,
+        desktop: p.desktop ?? undefined,
+        documents: p.documents ?? undefined,
+      }))
+      .catch(() => {})
+  }, [])
 
   // License key input
   const [licenseKey, setLicenseKey] = useState('')
@@ -86,7 +107,11 @@ export default function SettingsPage() {
       setPlan(session.plan ?? 'free')
     }
 
-    apiGetPreferences()
+    // Users whose scope came from the old Downloads/Desktop/Documents toggles
+    // keep it: their real paths are written into custom_folders once.
+    migrateLegacyMonitorFolders()
+      .catch(() => [])
+      .then(() => apiGetPreferences())
       .then(p => setPrefs(p))
       .catch(() => {/* use defaults */})
       .finally(() => setLoading(false))
@@ -116,18 +141,104 @@ export default function SettingsPage() {
     }
   }
 
-  function addCustomFolder() {
-    const trimmed = folderInput.trim()
+  /**
+   * Add a folder to the scan scope.
+   *
+   * A typed path is checked first — an unreadable or misspelled one used to be
+   * saved happily and then produce an empty scan, which reads as the app being
+   * broken rather than as a typo.
+   */
+  async function addCustomFolder(pathToAdd?: string) {
+    const trimmed = (pathToAdd ?? folderInput).trim()
     if (!trimmed) return
-    if (!prefs.custom_folders.includes(trimmed)) {
-      update('custom_folders', [...prefs.custom_folders, trimmed])
+    setFolderError(null)
+
+    const api = typeof window !== 'undefined' ? window.electronAPI : undefined
+    if (api?.pathExists) {
+      const check = await api.pathExists(trimmed)
+      if (!check.ok) {
+        setFolderError(check.error ?? 'That folder could not be opened.')
+        return
+      }
     }
+
+    if (prefs.custom_folders.some(f => f.toLowerCase() === trimmed.toLowerCase())) {
+      setFolderError('That folder is already in your scan scope.')
+      return
+    }
+
+    update('custom_folders', [...prefs.custom_folders, trimmed])
     setFolderInput('')
     setShowFolderInput(false)
   }
 
+  /** Pick a folder with the native browser instead of typing its path. */
+  async function browseForFolder() {
+    const api = typeof window !== 'undefined' ? window.electronAPI : undefined
+    if (!api?.openDirectoryPicker) {
+      setFolderError('Folder browsing needs the desktop app. Type the full path instead.')
+      return
+    }
+    const picked = await api.openDirectoryPicker()
+    if (picked) await addCustomFolder(picked)
+  }
+
   function removeCustomFolder(folder: string) {
     update('custom_folders', prefs.custom_folders.filter(f => f !== folder))
+    // Drop any hidden-flag for it too, so re-adding the folder later starts
+    // from the default of being shown.
+    update('quick_scan_hidden',
+      (prefs.quick_scan_hidden ?? []).filter(f => f.toLowerCase() !== folder.toLowerCase()))
+  }
+
+  /**
+   * Save an edited folder path, keeping its position and its Quick Scan setting.
+   * The new path is checked the same way a newly added one is.
+   */
+  async function saveEditedFolder(original: string) {
+    const next = editValue.trim()
+    if (!next) return
+    if (next === original) { setEditingFolder(null); return }
+    setFolderError(null)
+
+    const api = typeof window !== 'undefined' ? window.electronAPI : undefined
+    if (api?.pathExists) {
+      const check = await api.pathExists(next)
+      if (!check.ok) {
+        setFolderError(check.error ?? 'That folder could not be opened.')
+        return
+      }
+    }
+    if (prefs.custom_folders.some(f =>
+      f.toLowerCase() === next.toLowerCase() && f.toLowerCase() !== original.toLowerCase())) {
+      setFolderError('That folder is already in your scan scope.')
+      return
+    }
+
+    update('custom_folders', prefs.custom_folders.map(f => (f === original ? next : f)))
+    update('quick_scan_hidden',
+      (prefs.quick_scan_hidden ?? []).map(f =>
+        f.toLowerCase() === original.toLowerCase() ? next : f))
+    setEditingFolder(null)
+    setEditValue('')
+  }
+
+  /** Re-pick an existing entry with the native browser. */
+  async function browseToReplace(original: string) {
+    const api = typeof window !== 'undefined' ? window.electronAPI : undefined
+    if (!api?.openDirectoryPicker) return
+    const picked = await api.openDirectoryPicker()
+    if (!picked) return
+    setEditValue(picked)
+    setEditingFolder(original)
+  }
+
+  /** Show or hide a folder in the Quick Scan shortcuts. It stays in scope either way. */
+  function toggleQuickScan(folder: string, show: boolean) {
+    const hidden = (prefs.quick_scan_hidden ?? []).filter(
+      f => f.toLowerCase() !== folder.toLowerCase(),
+    )
+    update('quick_scan_hidden', show ? hidden : [...hidden, folder])
   }
 
   async function addBlocklistEntry() {
@@ -302,97 +413,133 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent className="p-6 pt-4 space-y-0">
 
-          {/* Downloads */}
-          <div className="flex items-center justify-between py-3">
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-foreground">Downloads</p>
-                <Badge className="text-[10px] h-4 px-1.5 bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800/50">Auto-monitor coming soon</Badge>
-              </div>
-              <p className="text-xs text-muted-foreground">C:\Users\{userName}\Downloads</p>
-            </div>
-            <Switch checked={prefs.monitor_downloads} onCheckedChange={v => update('monitor_downloads', v)} />
-          </div>
-          <Separator />
+          <p className="text-xs text-muted-foreground pb-3">
+            Mini Manager only looks at folders you add here. Everything in this
+            list is scanned and can be searched or organised by the assistant.
+          </p>
 
-          {/* Desktop */}
-          <div className="flex items-center justify-between py-3">
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-foreground">Desktop</p>
-                <Badge className="text-[10px] h-4 px-1.5 bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800/50">Auto-monitor coming soon</Badge>
-              </div>
-              <p className="text-xs text-muted-foreground">C:\Users\{userName}\Desktop</p>
+          {prefs.custom_folders.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border py-8 text-center">
+              <FolderPlus className="h-5 w-5 mx-auto text-muted-foreground mb-2" />
+              <p className="text-sm font-medium text-foreground">No folders yet</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Add a folder below and it will show up in Quick Scan.
+              </p>
             </div>
-            <Switch checked={prefs.monitor_desktop} onCheckedChange={v => update('monitor_desktop', v)} />
-          </div>
-          <Separator />
-
-          {/* Documents */}
-          <div className="flex items-center justify-between py-3">
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-foreground">Documents</p>
-                <Badge className="text-[10px] h-4 px-1.5 bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800/50">Auto-monitor coming soon</Badge>
-              </div>
-              <p className="text-xs text-muted-foreground">C:\Users\{userName}\Documents</p>
+          ) : (
+            <div className="divide-y divide-border">
+              {prefs.custom_folders.map(folder => {
+                const shown = !(prefs.quick_scan_hidden ?? []).some(
+                  h => h.toLowerCase() === folder.toLowerCase(),
+                )
+                const isEditing = editingFolder === folder
+                return (
+                  <div key={folder} className="py-3">
+                    {isEditing ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Input
+                          value={editValue}
+                          onChange={e => { setEditValue(e.target.value); setFolderError(null) }}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') saveEditedFolder(folder)
+                            if (e.key === 'Escape') { setEditingFolder(null); setFolderError(null) }
+                          }}
+                          className="flex-1 min-w-[220px] font-mono text-xs"
+                          autoFocus
+                        />
+                        <Button variant="outline" size="sm" onClick={() => browseToReplace(folder)}>
+                          <FolderSearch className="h-4 w-4 mr-1.5" />
+                          Browse
+                        </Button>
+                        <Button size="sm" onClick={() => saveEditedFolder(folder)}>
+                          <Check className="h-4 w-4 mr-1.5" />
+                          Save
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => { setEditingFolder(null); setFolderError(null) }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0 space-y-0.5">
+                          <p className="text-sm font-medium text-foreground truncate">
+                            {folder.split(/[\/]/).filter(Boolean).pop() ?? folder}
+                          </p>
+                          <p className="text-xs text-muted-foreground font-mono truncate">{folder}</p>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="flex items-center gap-2">
+                            <Label className="text-xs text-muted-foreground">Quick Scan</Label>
+                            <Switch
+                              checked={shown}
+                              onCheckedChange={v => toggleQuickScan(folder, v)}
+                            />
+                          </div>
+                          <button
+                            onClick={() => { setEditingFolder(folder); setEditValue(folder); setFolderError(null) }}
+                            aria-label={`Edit ${folder}`}
+                            className="text-muted-foreground hover:text-foreground"
+                          >
+                            <Pencil className="size-4" />
+                          </button>
+                          <button
+                            onClick={() => removeCustomFolder(folder)}
+                            aria-label={`Remove ${folder}`}
+                            className="text-muted-foreground hover:text-destructive"
+                          >
+                            <X className="size-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
-            <Switch checked={prefs.monitor_documents} onCheckedChange={v => update('monitor_documents', v)} />
-          </div>
-
-          {/* Custom folders */}
-          {prefs.custom_folders.length > 0 && (
-            <>
-              <Separator />
-              <div className="py-3 space-y-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Custom folders</p>
-                <div className="flex flex-wrap gap-2">
-                  {prefs.custom_folders.map(folder => (
-                    <div
-                      key={folder}
-                      className="flex items-center gap-1.5 rounded-md border border-border bg-muted px-2.5 py-1 text-xs font-mono"
-                    >
-                      <span>{folder}</span>
-                      <button
-                        onClick={() => removeCustomFolder(folder)}
-                        className="text-muted-foreground hover:text-destructive"
-                      >
-                        <X className="size-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
           )}
 
           <Separator />
 
           {/* Add custom folder */}
           <div className="pt-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowFolderInput(prev => !prev)}
-            >
-              <FolderPlus className="h-4 w-4 mr-2" />
-              Add custom folder
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={browseForFolder}>
+                <FolderPlus className="h-4 w-4 mr-2" />
+                Browse for folder
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setShowFolderInput(prev => !prev); setFolderError(null) }}
+              >
+                Or type a path
+              </Button>
+            </div>
             {showFolderInput && (
               <div className="mt-3 flex gap-2">
                 <Input
-                  placeholder="C:\Users\YourName\CustomFolder"
+                  placeholder="D:\Projects\Client Work"
                   value={folderInput}
-                  onChange={e => setFolderInput(e.target.value)}
+                  onChange={e => { setFolderInput(e.target.value); setFolderError(null) }}
                   onKeyDown={e => { if (e.key === 'Enter') addCustomFolder() }}
                   className="flex-1"
                   autoFocus
                 />
-                <Button variant="outline" size="sm" onClick={addCustomFolder}>
+                <Button variant="outline" size="sm" onClick={() => addCustomFolder()}>
                   Add
                 </Button>
               </div>
             )}
+            {folderError && (
+              <p className="mt-2 text-xs text-destructive">{folderError}</p>
+            )}
+            <p className="mt-2 text-xs text-muted-foreground">
+              Every folder here is scanned and can be searched or organised by the assistant.
+            </p>
           </div>
         </CardContent>
       </Card>

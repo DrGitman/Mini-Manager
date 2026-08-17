@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils'
 import { apiClassify, apiSaveScan, apiGetPreferences, apiLogCorrection, apiMarkApplied, apiOnboardingAnalyze } from '@/lib/api'
 import type { ClassificationResult, FolderSuggestion, ClassifyResponse } from '@/lib/api'
 import { getSession } from '@/lib/session'
+import { migrateLegacyMonitorFolders, resolveScopeFolders } from '@/lib/folder-digests'
 
 // SHA-256 fingerprint matching classify.py: sha256(name.lower() + ext.lower() + size)
 async function sha256Hex(text: string): Promise<string> {
@@ -426,18 +427,17 @@ export default function OrganizePage() {
     const path = searchParams.get('path')
     if (path) { scanElectron(path); return }
 
-    // Build quick-folder list from preferences + session username
-    const session = getSession()
-    const username = session?.name ?? 'User'
-
-    apiGetPreferences().then(prefs => {
-      const folders: string[] = []
-      if (prefs.monitor_downloads) folders.push(`C:\\Users\\${username}\\Downloads`)
-      if (prefs.monitor_desktop)   folders.push(`C:\\Users\\${username}\\Desktop`)
-      if (prefs.monitor_documents) folders.push(`C:\\Users\\${username}\\Documents`)
-      prefs.custom_folders.forEach(f => { if (!folders.includes(f)) folders.push(f) })
-      setQuickFolders(folders)
-    }).catch(() => {})
+    // Quick Scan shows the folders the user added and chose to pin here.
+    //
+    // These paths used to be assembled as C:\Users\<display name>\Downloads,
+    // which is not where anyone's folders are unless their Windows profile
+    // happens to match their full name — so the shortcut pointed at a folder
+    // that did not exist and scanning it found nothing.
+    migrateLegacyMonitorFolders()
+      .catch(() => [])
+      .then(() => resolveScopeFolders())
+      .then(scope => setQuickFolders(scope.filter(f => f.inQuickScan).map(f => f.path)))
+      .catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Scan (Browser FSAA) ─────────────────────────────────────────────────────

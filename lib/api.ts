@@ -1,6 +1,14 @@
 // Empty string = same origin (proxied through Next.js rewrites in dev, direct in prod)
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? ''
 
+/**
+ * Where the backend lives. The Electron main process cannot read
+ * NEXT_PUBLIC_* (those are baked into the renderer at build time), so it is
+ * handed this value instead of assuming localhost — which is what made Google
+ * sign-in fail in the packaged app.
+ */
+export const API_BASE = BASE
+
 // ─── Token storage ────────────────────────────────────────────────────────────
 
 function getToken(): string | null {
@@ -423,10 +431,18 @@ export interface Preferences {
   naming_convention: string
   auto_threshold: number
   review_threshold: number
+  /**
+   * Superseded by custom_folders. These assumed a home directory built from
+   * the account's display name, which is usually not where the folders are.
+   * Kept only so old saved preferences still load.
+   */
   monitor_downloads: boolean
   monitor_desktop: boolean
   monitor_documents: boolean
+  /** Every folder in the scan scope. The only source of what gets scanned. */
   custom_folders: string[]
+  /** Folders excluded from the Quick Scan shortcuts — still scanned. */
+  quick_scan_hidden: string[]
   notif_scan: boolean
   notif_apply: boolean
   notif_digest: boolean

@@ -158,7 +158,7 @@ def _safe_preview(file: FileItem) -> str:
     return file.content_preview
 
 
-async def classify_batch(
+async def _classify_chunk(
     files: list[FileItem],
     user_id: Optional[str],
     endpoint: str = "/classify",
@@ -166,7 +166,7 @@ async def classify_batch(
     existing_folders: Optional[list] = None,
     corrections_hint: str = "",
 ) -> tuple[list[ClassificationResult], TokenUsage]:
-    """Classify files using the configured Groq model via httpx."""
+    """One Groq request. Callers must keep the chunk small — see classify_batch."""
     if not files:
         return [], TokenUsage()
 
@@ -276,6 +276,130 @@ async def classify_batch(
         )
 
     return results, usage
+
+
+# Roughly how much serialised file JSON one request may carry. Groq rejects
+# oversized requests with 413, and a Downloads folder of a few hundred files —
+# each with a path and a text preview — went well past the limit, so a quick
+# scan failed outright with "Failed to classify files".
+_CHUNK_CHAR_BUDGET = 18_000
+_MAX_FILES_PER_CHUNK = 60
+
+
+async def _with_rate_limit_retry(call, attempts: int = 4):
+    """
+    Retry a Groq call that comes back 429.
+
+    Splitting a scan into several requests means they arrive together and can
+    trip the per-minute limit — which would fail the whole scan for a folder
+    that is merely large. Groq says how long to wait in Retry-After; that is
+    used when present, and a widening backoff otherwise.
+    """
+    for attempt in range(attempts):
+        try:
+            return await call()
+        except httpx.HTTPStatusError as exc:
+            rate_limited = exc.response is not None and exc.response.status_code == 429
+            if not rate_limited or attempt == attempts - 1:
+                raise
+            retry_after = 0.0
+            try:
+                retry_after = float(exc.response.headers.get("retry-after", 0))
+            except (TypeError, ValueError):
+                retry_after = 0.0
+            delay = retry_after if retry_after > 0 else min(2 ** attempt, 8)
+            logger.warning(
+                "Groq rate limit hit — waiting %.1fs before retrying (attempt %d/%d)",
+                delay, attempt + 1, attempts,
+            )
+            await asyncio.sleep(delay)
+
+
+def _split_into_chunks(files: list[FileItem]) -> list[list[FileItem]]:
+    """
+    Group files so each request stays under the size limit.
+
+    Budgeted by serialised length rather than file count, because one folder of
+    long Windows paths with previews weighs far more than another with short
+    names, and a fixed count would still overflow on the heavy one.
+    """
+    chunks: list[list[FileItem]] = []
+    current: list[FileItem] = []
+    used = 0
+
+    for f in files:
+        cost = len(f.name) + len(f.relative_path or "") + len(_safe_preview(f)[:500]) + 80
+        if current and (used + cost > _CHUNK_CHAR_BUDGET or len(current) >= _MAX_FILES_PER_CHUNK):
+            chunks.append(current)
+            current, used = [], 0
+        current.append(f)
+        used += cost
+
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+async def classify_batch(
+    files: list[FileItem],
+    user_id: Optional[str],
+    endpoint: str = "/classify",
+    prefs: Optional[dict] = None,
+    existing_folders: Optional[list] = None,
+    corrections_hint: str = "",
+) -> tuple[list[ClassificationResult], TokenUsage]:
+    """
+    Classify every file, splitting the work across as many requests as needed.
+
+    Chunks run one at a time. Firing them together is faster but trips Groq's
+    rate limit, and a 429 loses the whole scan rather than slowing it down.
+    """
+    if not files:
+        return [], TokenUsage()
+
+    async def run(chunk: list[FileItem], depth: int = 0) -> tuple[list[ClassificationResult], TokenUsage]:
+        try:
+            return await _with_rate_limit_retry(
+                lambda: _classify_chunk(
+                    chunk, user_id, endpoint, prefs, existing_folders, corrections_hint,
+                )
+            )
+        except httpx.HTTPStatusError as exc:
+            # Still too large despite the estimate — halve it and try again.
+            # Estimates can't account for how the model counts tokens, so this
+            # is the backstop that makes any folder work.
+            too_large = exc.response is not None and exc.response.status_code == 413
+            if not too_large or len(chunk) < 2 or depth >= 4:
+                raise
+            mid = len(chunk) // 2
+            logger.warning(
+                "Groq rejected a chunk of %d files as too large — splitting", len(chunk),
+            )
+            left, lu = await run(chunk[:mid], depth + 1)
+            right, ru = await run(chunk[mid:], depth + 1)
+            return left + right, TokenUsage(
+                tokens_in=lu.tokens_in + ru.tokens_in,
+                tokens_out=lu.tokens_out + ru.tokens_out,
+                model=_GROQ_MODEL,
+            )
+
+    chunks = _split_into_chunks(files)
+    logger.info("Classifying %d files in %d request(s)", len(files), len(chunks))
+
+    all_results: list[ClassificationResult] = []
+    total = TokenUsage(model=_GROQ_MODEL)
+
+    for i, chunk in enumerate(chunks):
+        # Space the requests slightly. Cheaper than being rate limited and
+        # having to wait out a Retry-After.
+        if i:
+            await asyncio.sleep(0.6)
+        results, usage = await run(chunk)
+        all_results.extend(results)
+        total.tokens_in += usage.tokens_in
+        total.tokens_out += usage.tokens_out
+
+    return all_results, total
 
 
 # ─── Explain via Gemini (single file) ─────────────────────────────────────────

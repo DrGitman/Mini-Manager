@@ -44,7 +44,8 @@ ALTER TABLE user_preferences
     ADD COLUMN IF NOT EXISTS notif_digest       BOOLEAN NOT NULL DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS notif_tips         BOOLEAN NOT NULL DEFAULT TRUE,
     ADD COLUMN IF NOT EXISTS notif_marketing    BOOLEAN NOT NULL DEFAULT FALSE,
-    ADD COLUMN IF NOT EXISTS theme              TEXT    NOT NULL DEFAULT 'light';
+    ADD COLUMN IF NOT EXISTS theme              TEXT    NOT NULL DEFAULT 'light',
+    ADD COLUMN IF NOT EXISTS quick_scan_hidden  TEXT[]  NOT NULL DEFAULT '{}';
 """
 
 _migrated = False
@@ -83,6 +84,16 @@ class Preferences(BaseModel):
         for path in (v or []):
             validated.append(_validate_folder(path))
         return validated[:20]  # cap at 20 entries
+    # Folders the user has hidden from Quick Scan. Everything in
+    # custom_folders is scanned; this only controls the shortcut list, so the
+    # default (empty) means every folder they added shows up.
+    quick_scan_hidden: List[str] = []
+
+    @field_validator("quick_scan_hidden", mode="before")
+    @classmethod
+    def validate_quick_scan_hidden(cls, v: List[str]) -> List[str]:
+        return [str(p) for p in (v or [])][:20]
+
     notif_scan: bool = True
     notif_apply: bool = True
     notif_digest: bool = False
@@ -102,7 +113,7 @@ async def get_preferences(user: dict = Depends(get_current_user)) -> Preferences
         SELECT naming_style, categories, target_folder, quarantine_mode,
                naming_convention, auto_threshold, review_threshold,
                monitor_downloads, monitor_desktop, monitor_documents,
-               custom_folders, notif_scan, notif_apply, notif_digest,
+               custom_folders, quick_scan_hidden, notif_scan, notif_apply, notif_digest,
                notif_tips, notif_marketing, theme
         FROM   user_preferences
         WHERE  user_id = $1
@@ -123,6 +134,7 @@ async def get_preferences(user: dict = Depends(get_current_user)) -> Preferences
         monitor_desktop=row["monitor_desktop"],
         monitor_documents=row["monitor_documents"],
         custom_folders=list(row["custom_folders"] or []),
+        quick_scan_hidden=list(row["quick_scan_hidden"] or []),
         notif_scan=row["notif_scan"],
         notif_apply=row["notif_apply"],
         notif_digest=row["notif_digest"],
@@ -145,10 +157,10 @@ async def save_preferences(
             user_id, naming_style, categories, target_folder, quarantine_mode,
             naming_convention, auto_threshold, review_threshold,
             monitor_downloads, monitor_desktop, monitor_documents,
-            custom_folders, notif_scan, notif_apply, notif_digest,
+            custom_folders, quick_scan_hidden, notif_scan, notif_apply, notif_digest,
             notif_tips, notif_marketing, theme
         )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
         ON CONFLICT (user_id) DO UPDATE SET
             naming_style      = EXCLUDED.naming_style,
             categories        = EXCLUDED.categories,
@@ -161,6 +173,7 @@ async def save_preferences(
             monitor_desktop   = EXCLUDED.monitor_desktop,
             monitor_documents = EXCLUDED.monitor_documents,
             custom_folders    = EXCLUDED.custom_folders,
+            quick_scan_hidden = EXCLUDED.quick_scan_hidden,
             notif_scan        = EXCLUDED.notif_scan,
             notif_apply       = EXCLUDED.notif_apply,
             notif_digest      = EXCLUDED.notif_digest,
@@ -181,6 +194,7 @@ async def save_preferences(
         body.monitor_desktop,
         body.monitor_documents,
         body.custom_folders,
+        body.quick_scan_hidden,
         body.notif_scan,
         body.notif_apply,
         body.notif_digest,

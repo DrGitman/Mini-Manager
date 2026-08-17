@@ -6,14 +6,25 @@ directories:
   output: dist-electron
   buildResources: electron/assets
 
-# Files to include in the app bundle
+# Files to include in the app bundle.
+#
+# Only .next/standalone is needed. Next's standalone output is self-contained —
+# it carries its own trimmed node_modules, and prepare-standalone.mjs copies
+# public/ and .next/static/ into it. Shipping .next/**/* and node_modules/**/*
+# as well added the build cache and every devDependency, producing an 831 MB
+# installer for a file organiser.
 files:
-  - .next/**/*
-  - public/**/*
   - electron/**/*
-  - node_modules/**/*
+  - .next/standalone/**/*
   - package.json
   - next.config.mjs
+
+# The Next server is started with child_process.fork(), which spawns a real
+# Node process. Node knows nothing about asar archives, so a server.js inside
+# app.asar cannot be executed — the app booted to a blank white window because
+# the fork silently failed. Keeping the files unpacked puts them at
+# resources/app/ as real files on disk.
+asar: false
 
 # Exclude dev/test artifacts
 npmRebuild: false

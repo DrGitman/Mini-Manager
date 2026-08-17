@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Eye, EyeOff } from 'lucide-react'
@@ -8,7 +8,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { saveSession } from '@/lib/session'
-import { apiSignup } from '@/lib/api'
+import { apiSignup, API_BASE } from '@/lib/api'
+
+const eAPI = typeof window !== 'undefined' ? window.electronAPI : undefined
+const isElectron = Boolean(eAPI?.isElectron)
 
 export default function SignupPage() {
   const router = useRouter()
@@ -20,6 +23,44 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [shaking, setShaking] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
+
+  // Desktop OAuth comes back through the minimanager:// protocol handler.
+  useEffect(() => {
+    if (!isElectron || !eAPI) return
+    eAPI.onGoogleAuthSuccess((data: Record<string, string>) => {
+      setGoogleLoading(false)
+      if (!data.token) {
+        setErrors(prev => ({ ...prev, form: data.message || 'Google sign-up failed.' }))
+        return
+      }
+      const initials = (data.name || data.email)
+        .split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('')
+      saveSession(
+        {
+          name: data.name,
+          email: data.email,
+          avatarInitials: initials,
+          plan: (data.plan as 'free' | 'pro' | 'business') ?? 'free',
+          joinedAt: Date.now(),
+        },
+        data.token,
+        true,
+      )
+      router.push('/onboarding')
+    })
+    return () => eAPI.removeGoogleAuthListener?.()
+  }, [router])
+
+  /** Sign up with Google. This is the only path allowed to create an account. */
+  async function handleGoogleSignup() {
+    if (isElectron && eAPI) {
+      setGoogleLoading(true)
+      await eAPI.googleAuthStart({ intent: 'signup', apiBase: API_BASE })
+    } else {
+      window.location.href = `${API_BASE}/api/v1/auth/google?mode=web&intent=signup`
+    }
+  }
 
   function validate() {
     const next: Record<string, string> = {}
@@ -156,6 +197,8 @@ export default function SignupPage() {
 
       <button
         type="button"
+        onClick={handleGoogleSignup}
+        disabled={googleLoading}
         className="flex h-11 w-full items-center justify-center gap-2.5 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
       >
         <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 7.9 3L37 10.1C33.7 7.1 29.1 5 24 5 12.9 5 4 13.9 4 25s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.9"/><path fill="#FF3D00" d="M6.3 15.5 13.9 21c2-5.5 7.1-9.5 13.1-9.5 3.1 0 5.8 1.1 7.9 3L41 8.6C37.5 5.3 31.1 3 24 3 16.3 3 9.6 7.7 6.3 15.5"/><path fill="#4CAF50" d="M24 45c6 0 11.3-2 15.3-5.2l-7.1-5.8C30.2 35.7 27.2 37 24 37c-5.3 0-9.7-3.3-11.3-7.9l-7.6 5.8C8.7 41 15.9 45 24 45"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.3 5.8l7.1 5.8C37.3 43.2 44 38 44 25c0-1.3-.1-2.6-.4-3.9"/></svg>

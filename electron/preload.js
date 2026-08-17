@@ -29,6 +29,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('get-user-paths'),
 
   /**
+   * Check a folder is real and readable before saving it to the scan scope.
+   * @returns {{ ok: boolean, error?: string }}
+   */
+  pathExists: (dirPath) =>
+    ipcRenderer.invoke('path-exists', dirPath),
+
+  /**
    * Move/rename a file using native fs.rename (fast, atomic on same volume).
    * Automatically creates target directories.
    */
@@ -61,7 +68,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
 
   /** Open Google OAuth in system browser (desktop flow → minimanager://auth callback) */
-  googleAuthStart: () => ipcRenderer.invoke('google-auth-start'),
+  googleAuthStart: (opts) => ipcRenderer.invoke('google-auth-start', opts),
 
   /** Listen for Google OAuth success. Callback receives { token, user_id, email, name, plan } */
   onGoogleAuthSuccess: (callback) =>

@@ -14,7 +14,7 @@
  * Digests are cached per folder and rebuilt on demand, so asking three
  * questions in a row no longer walks the disk three times.
  */
-import { apiGetPreferences } from '@/lib/api'
+import { apiGetPreferences, apiSavePreferences } from '@/lib/api'
 import type { ScannedFile, UserPaths } from '@/types/electron'
 
 const STALE_AFTER_MS = 10 * 60 * 1000
@@ -131,36 +131,84 @@ function emptyDigest(root: string, label: string, error: string): FolderDigest {
  * display name — a profile folder is often not the person's first name, and the
  * guessed path simply did not exist.
  */
-export async function resolveWatchedFolders(): Promise<{ path: string; label: string }[]> {
-  const api = typeof window !== 'undefined' ? window.electronAPI : undefined
-  if (!api) return []
+/** A readable name for a folder, taken from the last segment of its path. */
+export function labelForPath(p: string): string {
+  return p.split(/[\\/]/).filter(Boolean).pop() ?? p
+}
 
-  let paths: UserPaths = { home: null, downloads: null, desktop: null, documents: null }
+export interface ScopeFolder {
+  path: string
+  label: string
+  /** Whether it appears in the Quick Scan shortcuts. It is scanned either way. */
+  inQuickScan: boolean
+}
+
+/**
+ * The user's scan scope — every folder they added, and nothing else.
+ *
+ * The old Downloads/Desktop/Documents toggles built paths out of the account's
+ * display name (C:\Users\<first word>\Downloads). That is not where most
+ * people's folders live, so the app confidently scanned somewhere that did not
+ * exist. Scope now comes only from folders the user picked or typed.
+ *
+ * Anyone who had those toggles on is migrated once, below, so they do not lose
+ * their setup on upgrade.
+ */
+export async function resolveScopeFolders(): Promise<ScopeFolder[]> {
+  const prefs = await apiGetPreferences()
+  const hidden = new Set((prefs.quick_scan_hidden ?? []).map(p => p.toLowerCase()))
+
+  const seen = new Set<string>()
+  const out: ScopeFolder[] = []
+
+  for (const p of prefs.custom_folders ?? []) {
+    if (!p) continue
+    const key = p.toLowerCase()
+    if (seen.has(key)) continue      // a duplicate would be counted twice in the totals
+    seen.add(key)
+    out.push({ path: p, label: labelForPath(p), inQuickScan: !hidden.has(key) })
+  }
+
+  return out
+}
+
+/**
+ * One-time upgrade for users whose scope came from the old toggles.
+ *
+ * Resolves the real paths from the OS and writes them into custom_folders, so
+ * removing the toggles does not silently empty someone's scan scope.
+ * Returns the folders added, if any.
+ */
+export async function migrateLegacyMonitorFolders(): Promise<string[]> {
+  const api = typeof window !== 'undefined' ? window.electronAPI : undefined
+  if (!api?.getUserPaths) return []
+
+  const prefs = await apiGetPreferences()
+  if ((prefs.custom_folders ?? []).length > 0) return []      // already using the new model
+  if (!prefs.monitor_downloads && !prefs.monitor_desktop && !prefs.monitor_documents) return []
+
+  let paths: UserPaths
   try {
     paths = await api.getUserPaths()
   } catch {
-    // Older desktop build without this IPC — custom folders still work below.
+    return []
   }
 
-  const prefs = await apiGetPreferences()
-  const out: { path: string; label: string }[] = []
+  const wanted = [
+    prefs.monitor_downloads ? paths.downloads : null,
+    prefs.monitor_desktop ? paths.desktop : null,
+    prefs.monitor_documents ? paths.documents : null,
+  ].filter((p): p is string => Boolean(p))
 
-  if (prefs.monitor_downloads && paths.downloads) out.push({ path: paths.downloads, label: 'Downloads' })
-  if (prefs.monitor_desktop && paths.desktop) out.push({ path: paths.desktop, label: 'Desktop' })
-  if (prefs.monitor_documents && paths.documents) out.push({ path: paths.documents, label: 'Documents' })
+  if (!wanted.length) return []
 
-  for (const f of prefs.custom_folders ?? []) {
-    if (f) out.push({ path: f, label: f.split(/[\\/]/).filter(Boolean).pop() ?? f })
-  }
+  await apiSavePreferences({ ...prefs, custom_folders: wanted })
+  return wanted
+}
 
-  // A folder listed twice would be counted twice in the totals.
-  const seen = new Set<string>()
-  return out.filter(f => {
-    const key = f.path.toLowerCase()
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
+/** Back-compat name used by the assistant panel. */
+export async function resolveWatchedFolders(): Promise<{ path: string; label: string }[]> {
+  return (await resolveScopeFolders()).map(({ path, label }) => ({ path, label }))
 }
 
 /** Scan one folder and cache the result. Failures are recorded, not hidden. */

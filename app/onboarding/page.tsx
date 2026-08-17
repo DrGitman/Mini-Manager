@@ -3,13 +3,15 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { apiSavePreferences } from '@/lib/api'
+import { apiGetPreferences, apiSavePreferences, type Preferences } from '@/lib/api'
 import {
   Layers,
   Sparkles,
   RotateCcw,
   Shield,
   FolderDown,
+  FolderPlus,
+  X,
   Monitor,
   FileText,
   Check,
@@ -147,17 +149,29 @@ const FOLDERS: FolderConfig[] = [
   },
 ]
 
+/**
+ * Pick the folders Mini Manager will look at.
+ *
+ * This step used to offer Downloads / Desktop / Documents as fixed choices and
+ * then save no path at all, so people finished onboarding with an empty scan
+ * scope and a Quick Scan that pointed at folders which did not exist. The user
+ * now chooses real folders, and those exact paths are what gets saved.
+ */
 function StepFolders({
-  selected,
-  onChange,
+  folders,
+  onAdd,
+  onRemove,
   onNext,
   onBack,
 }: {
-  selected: Set<FolderKey>
-  onChange: (key: FolderKey) => void
+  folders: string[]
+  onAdd: () => void
+  onRemove: (path: string) => void
   onNext: () => void
   onBack: () => void
 }) {
+  const canBrowse = typeof window !== 'undefined' && Boolean(window.electronAPI?.openDirectoryPicker)
+
   return (
     <div className="flex flex-col gap-6 px-2 py-4">
       <div>
@@ -165,53 +179,62 @@ function StepFolders({
           Where should Mini Manager look?
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Select the folders you want Mini Manager to scan and organise.
+          Choose a folder to start with — your Downloads folder is a good first pick.
+          Mini Manager only ever looks at folders you choose.
         </p>
       </div>
 
-      <div className="flex flex-col gap-3">
-        {FOLDERS.map(({ key, label, description, icon }) => {
-          const isSelected = selected.has(key)
-          return (
-            <button
-              key={key}
-              onClick={() => onChange(key)}
-              className={cn(
-                'flex w-full items-center gap-4 rounded-xl border p-4 text-left transition-all duration-150',
-                isSelected
-                  ? 'border-indigo-300 bg-indigo-50 shadow-sm ring-1 ring-indigo-200'
-                  : 'border-border bg-card hover:border-indigo-200 hover:bg-indigo-50/30',
-              )}
+      {folders.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {folders.map(path => (
+            <div
+              key={path}
+              className="flex items-center gap-3 rounded-xl border border-indigo-300 bg-indigo-50 p-4 dark:bg-indigo-950/30 dark:border-indigo-800/50"
             >
-              {/* Checkbox visual */}
-              <div
-                className={cn(
-                  'flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-colors',
-                  isSelected
-                    ? 'border-indigo-600 bg-indigo-600'
-                    : 'border-border bg-background',
-                )}
-              >
-                {isSelected && <Check className="size-3 text-white" strokeWidth={3} />}
-              </div>
-
-              {/* Folder icon */}
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background">
-                {icon}
+                <FolderDown className="size-5 text-indigo-600" />
               </div>
+              <div className="min-w-0 flex flex-col gap-0.5">
+                <span className="text-sm font-semibold text-foreground truncate">
+                  {path.split(/[\/]/).filter(Boolean).pop() ?? path}
+                </span>
+                <span className="text-xs text-muted-foreground font-mono truncate">{path}</span>
+              </div>
+              <button
+                onClick={() => onRemove(path)}
+                aria-label={`Remove ${path}`}
+                className="ml-auto shrink-0 text-muted-foreground hover:text-destructive"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
-              {/* Text */}
-              <div className="flex flex-col gap-0.5">
-                <span className="text-sm font-semibold text-foreground">{label}</span>
-                <span className="text-xs text-muted-foreground">{description}</span>
-              </div>
-            </button>
-          )
-        })}
-      </div>
+      <button
+        onClick={onAdd}
+        disabled={!canBrowse}
+        className={cn(
+          'flex w-full items-center justify-center gap-2 rounded-xl border border-dashed p-6 text-sm font-medium transition-colors',
+          canBrowse
+            ? 'border-border text-foreground hover:border-indigo-300 hover:bg-indigo-50/40'
+            : 'border-border text-muted-foreground cursor-not-allowed',
+        )}
+      >
+        <FolderPlus className="size-4" />
+        {folders.length ? 'Add another folder' : 'Choose a folder'}
+      </button>
+
+      {!canBrowse && (
+        <p className="text-xs text-muted-foreground">
+          Folder picking needs the desktop app. You can skip this and add folders
+          later in Settings → Scan Scope.
+        </p>
+      )}
 
       <p className="text-xs text-muted-foreground">
-        You can add more folders anytime in{' '}
+        You can add, edit or remove folders anytime in{' '}
         <span className="font-medium text-foreground">Settings → Scan Scope</span>
       </p>
 
@@ -220,8 +243,8 @@ function StepFolders({
           <ChevronLeft className="size-4" />
           Back
         </Button>
-        <Button onClick={onNext} disabled={selected.size === 0} className="h-10 px-6 gap-2">
-          Continue
+        <Button onClick={onNext} className="h-10 px-6 gap-2">
+          {folders.length ? 'Continue' : 'Skip for now'}
           <ChevronRight className="size-4" />
         </Button>
       </div>
@@ -487,6 +510,7 @@ const TOTAL_STEPS = 5
 export default function OnboardingPage() {
   const router = useRouter()
   const [currentStep, setCurrentStep] = useState(1)
+  const [scopeFolders, setScopeFolders] = useState<string[]>([])
   const [selectedFolders, setSelectedFolders] = useState<Set<FolderKey>>(
     new Set(['downloads', 'desktop']),
   )
@@ -497,6 +521,20 @@ export default function OnboardingPage() {
   }
   function back() {
     setCurrentStep((s) => Math.max(s - 1, 1))
+  }
+
+  /** Real folder paths chosen with the native picker — saved to the scan scope. */
+  async function addScopeFolder() {
+    const api = typeof window !== 'undefined' ? window.electronAPI : undefined
+    if (!api?.openDirectoryPicker) return
+    const picked = await api.openDirectoryPicker()
+    if (!picked) return
+    setScopeFolders(prev =>
+      prev.some(p => p.toLowerCase() === picked.toLowerCase()) ? prev : [...prev, picked])
+  }
+
+  function removeScopeFolder(path: string) {
+    setScopeFolders(prev => prev.filter(p => p !== path))
   }
 
   function toggleFolder(key: FolderKey) {
@@ -527,13 +565,24 @@ export default function OnboardingPage() {
       : selectedFolders.has('documents') ? 'Documents'
       : 'Downloads'
 
-    // Save to backend (non-blocking — don't block navigation on failure)
-    apiSavePreferences({
-      naming_style: namingMap[namingConvention] ?? 'title',
-      categories: categories.length ? categories : ['Documents', 'Images', 'Videos', 'Audio', 'Code', 'Archives'],
-      target_folder: targetFolder,
-      quarantine_mode: 'auto',
-    }).catch(() => {/* silent */})
+    // Save to backend (non-blocking — don't block navigation on failure).
+    //
+    // Merged onto the stored preferences rather than sent alone: the endpoint
+    // fills anything missing with defaults, so a partial save silently reset
+    // every setting the user had not reached yet.
+    apiGetPreferences()
+      .catch(() => null)
+      .then(current => apiSavePreferences({
+        ...(current ?? {}),
+        naming_style: namingMap[namingConvention] ?? 'title',
+        categories: categories.length ? categories : ['Documents', 'Images', 'Videos', 'Audio', 'Code', 'Archives'],
+        target_folder: targetFolder,
+        quarantine_mode: 'auto',
+        // The folders the user actually picked. Without this the scan scope is
+        // empty after onboarding and Quick Scan has nothing to show.
+        custom_folders: scopeFolders,
+      } as Preferences))
+      .catch(() => {/* silent */})
 
     router.push('/organize')
   }
@@ -553,8 +602,9 @@ export default function OnboardingPage() {
             {currentStep === 1 && <StepWelcome onNext={next} />}
             {currentStep === 2 && (
               <StepFolders
-                selected={selectedFolders}
-                onChange={toggleFolder}
+                folders={scopeFolders}
+                onAdd={addScopeFolder}
+                onRemove={removeScopeFolder}
                 onNext={next}
                 onBack={back}
               />

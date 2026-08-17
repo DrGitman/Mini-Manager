@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { saveSession } from '@/lib/session'
-import { apiLogin } from '@/lib/api'
+import { apiLogin, API_BASE } from '@/lib/api'
 
 const eAPI = typeof window !== 'undefined' ? (window as any).electronAPI : undefined
 const isElectron = !!eAPI?.isElectron
@@ -23,6 +23,18 @@ export default function LoginPage() {
   const [googleLoading, setGoogleLoading] = useState(false)
   const [errors, setErrors] = useState<{ email?: string; password?: string; form?: string }>({})
   const [shaking, setShaking] = useState(false)
+
+  // Google sign-in can bounce back here with a reason it was refused —
+  // most often that no account exists for that address yet.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const message = params.get('message')
+    if (params.get('error') && message) {
+      setErrors(prev => ({ ...prev, form: message }))
+    } else if (params.get('expired')) {
+      setErrors(prev => ({ ...prev, form: 'Your session ended. Please sign in again.' }))
+    }
+  }, [])
 
   // Listen for Google OAuth callback from Electron protocol handler
   useEffect(() => {
@@ -41,12 +53,15 @@ export default function LoginPage() {
   }, [])
 
   async function handleGoogleLogin() {
+    // intent=login means the backend will refuse rather than silently create an
+    // account. Someone whose account was deleted, or who picks the wrong Google
+    // account, gets told so instead of landing in a new empty one.
     if (isElectron) {
       setGoogleLoading(true)
-      await eAPI.googleAuthStart()
+      await eAPI.googleAuthStart({ intent: 'login', apiBase: API_BASE })
       // Result comes back via onGoogleAuthSuccess listener above
     } else {
-      window.location.href = '/api/v1/auth/google?mode=web'
+      window.location.href = `${API_BASE}/api/v1/auth/google?mode=web&intent=login`
     }
   }
 

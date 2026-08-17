@@ -111,10 +111,23 @@ export function updateUser(patch: Partial<DemoUser>): DemoUser | null {
   return next
 }
 
+/**
+ * Per-user data held outside the session itself.
+ *
+ * Chat history is stored under one key with no user in it, so leaving it behind
+ * showed the previous person's conversations — with their filenames in them —
+ * to whoever signed in next on the same machine.
+ */
+const USER_DATA_KEYS = ['mm.agent.sessions']
+
 export function signOut(): void {
   localStorage.removeItem(SESSION_KEY)
   localStorage.removeItem(TOKEN_KEY)
   sessionStorage.removeItem(SESSION_KEY)
   sessionStorage.removeItem(TOKEN_KEY)
+  for (const key of USER_DATA_KEYS) {
+    localStorage.removeItem(key)
+    sessionStorage.removeItem(key)
+  }
   emitSessionChange()
 }

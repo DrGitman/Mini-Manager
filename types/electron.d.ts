@@ -25,10 +25,14 @@ export interface UserPaths {
 }
 
 export interface ElectronAPI {
+  /** Always true when running in the desktop app. */
+  isElectron: boolean
   openDirectoryPicker: () => Promise<string | null>
   scanDirectory: (dirPath: string) => Promise<{ files: ScannedFile[]; folders: unknown[] }>
   /** Real Downloads/Desktop/Documents paths — never guess these from a username. */
   getUserPaths: () => Promise<UserPaths>
+  /** Verify a folder is real and readable before saving it to the scan scope. */
+  pathExists: (dirPath: string) => Promise<{ ok: boolean; error?: string }>
   moveFile: (fromPath: string, toPath: string) => Promise<void>
   renameFolder: (oldAbsPath: string, newAbsPath: string) => Promise<void>
   /** Sends to the OS Recycle Bin — recoverable, not a real delete. */
@@ -36,8 +40,9 @@ export interface ElectronAPI {
   /** Runs AI-planned operations on this machine. */
   runOperations: (operations: AgentOperation[]) => Promise<AgentOpResult[]>
   platform: string
-  googleAuthStart: () => Promise<void>
+  googleAuthStart: (opts?: { intent?: 'login' | 'signup'; apiBase?: string }) => Promise<void>
   onGoogleAuthSuccess: (cb: (data: Record<string, string>) => void) => void
+  removeGoogleAuthListener?: () => void
 }
 
 declare global {

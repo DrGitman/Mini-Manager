@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Download, Monitor, Globe, ArrowRight, Code2, Sparkles } from "lucide-react";
+import { Download, Monitor, Globe, ArrowRight, Code2 } from "lucide-react";
 
 export default function DownloadCenter() {
   const downloads = [
@@ -19,21 +19,6 @@ export default function DownloadCenter() {
       primary: true,
       color: "from-[#00E5FF]/20 to-transparent",
       borderColor: "border-[#00E5FF]/30"
-    },
-    {
-      id: "windows-portable",
-      title: "Windows Portable",
-      icon: <Sparkles className="w-8 h-8 text-[#7C4DFF]" />,
-      version: "v1.0.0-beta",
-      size: "62.0 MB",
-      badge: "Standalone Zip",
-      description: "Run Mini Manager instantly without running an installer. Unzip and launch directly on any Windows PC.",
-      buttonText: "Download Portable Zip",
-      buttonIcon: <Download size={18} />,
-      link: "https://github.com/DrGitman/Mini-Manager/releases",
-      primary: false,
-      color: "from-[#7C4DFF]/20 to-transparent",
-      borderColor: "border-[#7C4DFF]/30"
     },
     {
       id: "web",

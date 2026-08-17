@@ -266,6 +266,16 @@ async def get_current_user_with_mfa(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Same revocation rules as the standard dependency — a deleted account or a
+    # token issued before "sign out all devices" is not valid here either.
+    from .auth import _is_revoked
+    if await _is_revoked(payload):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session ended. Please sign in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     user_id = payload.get("sub")
     pool = get_pool()
 

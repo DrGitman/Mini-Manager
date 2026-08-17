@@ -20,14 +20,20 @@ _REVOKED_DETAIL = "Session ended. Please sign in again."
 
 async def _is_revoked(payload: dict) -> bool:
     """
-    True if the token was issued before the user's last "sign out all devices".
+    True if this token must no longer be accepted.
 
-    Fails open: if the lookup errors (pool down, column missing on an old DB),
-    we let the request through rather than locking every user out.
+    Two reasons: the account no longer exists, or the token predates the user's
+    last "sign out all devices".
+
+    Fails open only on a genuine lookup *error* (pool down, column missing on an
+    old DB), so a database blip does not lock every user out. A row that is
+    simply absent is not an error — it is a deleted account, and the token dies
+    with it. Treating that as "not revoked" let a deleted account keep using the
+    API until its token happened to expire.
     """
     iat = payload.get("iat")
     user_id = payload.get("sub")
-    if not iat or not user_id:
+    if not user_id:
         return False
     try:
         pool = get_pool()
@@ -37,7 +43,12 @@ async def _is_revoked(payload: dict) -> bool:
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning("Revocation check failed, allowing request: %s", exc)
         return False
-    if not row or row["sessions_valid_from"] is None:
+
+    if row is None:
+        logger.info("Rejecting token for deleted account %s", user_id)
+        return True
+
+    if not iat or row["sessions_valid_from"] is None:
         return False
     return iat < row["sessions_valid_from"].timestamp()
 

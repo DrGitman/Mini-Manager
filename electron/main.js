@@ -62,8 +62,13 @@ function createWindow() {
   if (isDev) {
     mainWindow.loadURL(devUrl)
   } else {
-    // In production, Next.js is started as a child process on port 3333 (see below)
-    mainWindow.loadURL('http://localhost:3333')
+    // The Next server is forked moments earlier and takes a second or two to
+    // listen, so loading straight away fails with connection-refused and the
+    // window sits blank. Show a loading state immediately — otherwise
+    // ready-to-show never fires during the retries and no window appears at
+    // all, which reads as the app failing to launch.
+    mainWindow.loadURL(SPLASH_URL)
+    loadWhenReady(mainWindow, 'http://localhost:3333')
   }
 
   mainWindow.once('ready-to-show', () => {
@@ -151,17 +156,111 @@ app.on('activate', () => {
 
 let nextServerProcess = null
 
+/** Shown for the second or two the internal server takes to start. */
+const SPLASH_URL =
+  'data:text/html;charset=utf-8,' +
+  encodeURIComponent(
+    `<body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;
+                  font-family:Segoe UI,system-ui,sans-serif;background:#fff;color:#666">
+       <div style="text-align:center">
+         <div style="width:28px;height:28px;margin:0 auto 16px;border:3px solid #e5e7eb;
+                     border-top-color:#3364db;border-radius:50%;animation:s .8s linear infinite"></div>
+         <div style="font-size:14px">Starting Mini Manager…</div>
+       </div>
+       <style>@keyframes s{to{transform:rotate(360deg)}}</style>
+     </body>`,
+  )
+
+/**
+ * Load the app once the server answers.
+ *
+ * loadURL rejects if nothing is listening yet, so each failure is retried
+ * rather than left as a blank window. ~30s of headroom covers a cold start on
+ * a slow disk; past that something is genuinely wrong and we say so.
+ */
+function loadWhenReady(win, url, attempt = 0) {
+  if (!win || win.isDestroyed()) return
+  win.loadURL(url).catch(() => {
+    if (attempt >= 60) {
+      showStartupError(
+        'Mini Manager could not reach its internal server.',
+        'The server did not start within 30 seconds. Restarting the app usually fixes this.',
+      )
+      return
+    }
+    setTimeout(() => loadWhenReady(win, url, attempt + 1), 500)
+  })
+}
+
+/**
+ * Where server.js ends up depends on how the app was packaged, so try each
+ * known layout rather than assuming one. Getting this wrong is invisible: the
+ * fork fails, nothing listens on 3333, and the user sees a blank white window
+ * with no error anywhere.
+ */
+function findServerPath() {
+  const candidates = [
+    // asar: false — what this app ships.
+    path.join(process.resourcesPath, 'app', '.next', 'standalone', 'server.js'),
+    // If asar is ever re-enabled, it must be paired with asarUnpack for the
+    // standalone folder, because fork() cannot run a script inside an archive.
+    path.join(process.resourcesPath, 'app.asar.unpacked', '.next', 'standalone', 'server.js'),
+    // Running unpackaged.
+    path.join(app.getAppPath(), '.next', 'standalone', 'server.js'),
+  ]
+  return candidates.find(p => fs.existsSync(p)) ?? null
+}
+
 function startNextServer() {
-  const serverPath = path.join(process.resourcesPath, 'app', '.next', 'standalone', 'server.js')
-  if (!fs.existsSync(serverPath)) {
-    console.error('Standalone server not found at', serverPath)
+  const serverPath = findServerPath()
+  if (!serverPath) {
+    console.error('Standalone server not found. Looked in resources/app, app.asar.unpacked and the app path.')
+    showStartupError(
+      'Mini Manager could not start its internal server.',
+      'The application files appear to be incomplete. Reinstalling usually fixes this.',
+    )
     return
   }
+
   nextServerProcess = require('child_process').fork(serverPath, [], {
+    // server.js resolves .next/ and public/ relative to where it runs.
+    cwd: path.dirname(serverPath),
     env: { ...process.env, PORT: '3333', NODE_ENV: 'production' },
     silent: true,
   })
-  nextServerProcess.on('error', err => console.error('Next.js server error:', err))
+
+  nextServerProcess.stderr?.on('data', d => console.error('[next]', d.toString()))
+  nextServerProcess.on('error', err => {
+    console.error('Next.js server error:', err)
+    showStartupError('Mini Manager could not start its internal server.', String(err && err.message))
+  })
+  nextServerProcess.on('exit', (code) => {
+    if (code !== 0 && code !== null) {
+      console.error('Next.js server exited with code', code)
+      showStartupError(
+        'Mini Manager’s internal server stopped unexpectedly.',
+        `It exited with code ${code}. Restarting the app usually fixes this.`,
+      )
+    }
+  })
+}
+
+/** Say what went wrong in the window, rather than leaving it blank. */
+function showStartupError(title, detail) {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
+  mainWindow.loadURL(
+    'data:text/html;charset=utf-8,' +
+      encodeURIComponent(
+        `<body style="font-family:Segoe UI,system-ui,sans-serif;padding:48px;color:#1a1a1a">
+           <h2 style="margin:0 0 12px">${esc(title)}</h2>
+           <p style="color:#555;line-height:1.6">${esc(detail)}</p>
+           <p style="color:#888;font-size:13px;margin-top:24px">
+             If it keeps happening, contact support and mention this screen.
+           </p>
+         </body>`,
+      ),
+  )
 }
 
 app.on('before-quit', () => {
@@ -254,6 +353,26 @@ ipcMain.handle('scan-directory', async (_, dirPath) => {
  * scanned a path that does not exist and reported an empty folder.
  * app.getPath knows the actual, redirected-aware locations.
  */
+/**
+ * Whether a typed path is a folder we can actually read.
+ *
+ * A path entered by hand and never checked simply produced an empty scan with
+ * no explanation, so a single typo looked like the app being broken.
+ */
+ipcMain.handle('path-exists', async (_, dirPath) => {
+  try {
+    const stat = fs.statSync(dirPath)
+    if (!stat.isDirectory()) return { ok: false, error: 'That path is a file, not a folder.' }
+    fs.readdirSync(dirPath)
+    return { ok: true }
+  } catch (err) {
+    const code = err && err.code
+    if (code === 'ENOENT') return { ok: false, error: 'That folder does not exist.' }
+    if (code === 'EPERM' || code === 'EACCES') return { ok: false, error: 'No permission to read that folder.' }
+    return { ok: false, error: 'That folder could not be opened.' }
+  }
+})
+
 ipcMain.handle('get-user-paths', async () => {
   const safe = (name) => {
     try { return app.getPath(name) } catch { return null }
@@ -459,10 +578,15 @@ ipcMain.handle('run-operations', async (_, operations) => {
 
 // ─── IPC: Google OAuth ────────────────────────────────────────────────────────
 
-ipcMain.handle('google-auth-start', async () => {
-  // Opens Google OAuth in the user's default browser
-  // Backend redirects back to minimanager://auth?token=... when done
-  await shell.openExternal('http://localhost:8000/api/v1/auth/google?mode=desktop')
+ipcMain.handle('google-auth-start', async (_, opts = {}) => {
+  // Opens Google OAuth in the user's default browser.
+  // The backend redirects back to minimanager://auth?token=... when done.
+  //
+  // The base URL is passed in by the renderer: this used to be hard-coded to
+  // localhost:8000, so Google sign-in could never work in the installed app.
+  const base = (opts.apiBase || '').replace(/\/$/, '') || 'http://localhost:8000'
+  const intent = opts.intent === 'login' ? 'login' : 'signup'
+  await shell.openExternal(`${base}/api/v1/auth/google?mode=desktop&intent=${intent}`)
 })
 
 // ─── IPC: Get platform info ───────────────────────────────────────────────────
