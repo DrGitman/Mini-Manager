@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useRef, useEffect } from 'react'
 import { Send, Bot, User, Loader2, AlertCircle } from 'lucide-react'
@@ -61,7 +61,7 @@ export default function SupportPage() {
       {/* Header */}
       <div className="mb-4">
         <h1 className="text-2xl font-semibold text-foreground">Support</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">AI-powered support â€” escalates to a human only when needed</p>
+        <p className="text-sm text-muted-foreground mt-0.5">AI-powered support — escalates to a human only when needed</p>
       </div>
 
       {/* Chat window */}
@@ -123,7 +123,7 @@ export default function SupportPage() {
       {/* Input */}
       <div className="flex gap-2">
         <Input
-          placeholder="Describe your issueâ€¦"
+          placeholder="Describe your issue…"
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}

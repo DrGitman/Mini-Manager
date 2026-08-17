@@ -1,7 +1,7 @@
-﻿import { SUPPORT_EMAIL } from '@/lib/contact'
+import { SUPPORT_EMAIL } from '@/lib/contact'
 
 export const metadata = {
-  title: 'Terms of Service â€” Mini Manager',
+  title: 'Terms of Service — Mini Manager',
 }
 
 export default function TermsPage() {

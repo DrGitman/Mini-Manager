@@ -1,7 +1,7 @@
-﻿import { SUPPORT_EMAIL } from '@/lib/contact'
+import { SUPPORT_EMAIL } from '@/lib/contact'
 
 export const metadata = {
-  title: 'Refund Policy â€” Mini Manager',
+  title: 'Refund Policy — Mini Manager',
 }
 
 export default function RefundsPage() {
@@ -32,7 +32,7 @@ export default function RefundsPage() {
       <Section title="2. Renewals">
         <p>
           Subscriptions renew automatically until cancelled. The 14-day window applies to each
-          individual charge, including renewals â€” so if a renewal charge catches you by surprise,
+          individual charge, including renewals — so if a renewal charge catches you by surprise,
           you can request a refund for it within 14 days of that charge.
         </p>
         <p>
@@ -64,7 +64,7 @@ export default function RefundsPage() {
       <Section title="5. How Refunds Are Issued">
         <p>
           Approved refunds are returned to the original payment method. Paddle typically processes
-          them within 3â€“5 business days, though your bank may take up to 10 business days to show
+          them within 3–5 business days, though your bank may take up to 10 business days to show
           the credit. Once a refund is issued, access to paid features ends and your account returns
           to the Free plan.
         </p>

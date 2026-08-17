@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -61,7 +61,7 @@ const TESTIMONIALS = [
   {
     id: 't2',
     quote: 'The undo feature alone is worth it. I accidentally moved a whole project folder and got it back in one click.',
-    author: 'JÃ¼rgen M.',
+    author: 'Jürgen M.',
     location: 'Berlin',
   },
   {
@@ -97,7 +97,7 @@ export default function UpgradePage() {
   const [loading] = useState(false)
   const [error] = useState<string | null>(null)
 
-  // Live session â€” the app shell keeps this in sync with GET /profile.
+  // Live session — the app shell keeps this in sync with GET /profile.
   const session = useSession()
   const currentPlan = session?.plan ?? 'free'
 
@@ -109,6 +109,13 @@ export default function UpgradePage() {
     justPaid ? 'pending' : 'idle',
   )
   const success = currentPlan !== 'free'
+
+  // Drop ?paddle_status from the URL once it's been read. Leaving it there
+  // means a refresh or a bookmark replays "payment received" for someone who
+  // never paid — which reads as broken at best and dishonest at worst.
+  useEffect(() => {
+    if (justPaid) router.replace('/upgrade', { scroll: false })
+  }, [justPaid, router])
 
   useEffect(() => {
     if (!justPaid || success) return
@@ -125,7 +132,7 @@ export default function UpgradePage() {
             return
           }
         } catch {
-          // keep polling â€” a transient failure shouldn't end activation
+          // keep polling — a transient failure shouldn't end activation
         }
         await new Promise(r => setTimeout(r, 3000))
       }
@@ -146,7 +153,7 @@ export default function UpgradePage() {
   const bizLabel = annual ? `$${bizPrice}/seat/month billed annually` : `$${bizPrice}/seat/month`
 
   function handleUpgradePro() {
-    // Full-page branded checkout â€” Paddle's inline iframe renders inside it.
+    // Full-page branded checkout — Paddle's inline iframe renders inside it.
     router.push('/checkout?plan=pro')
   }
 
@@ -158,7 +165,7 @@ export default function UpgradePage() {
         <p className="text-muted-foreground mt-2">Unlock unlimited AI organization.</p>
       </div>
 
-      {/* Confirmed by the server â€” currentPlan comes from GET /profile. */}
+      {/* Confirmed by the server — currentPlan comes from GET /profile. */}
       {success && (
         <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-green-800 text-sm font-medium">
           <Check className="h-4 w-4 shrink-0" />
@@ -171,7 +178,7 @@ export default function UpgradePage() {
       {!success && activation === 'pending' && (
         <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-blue-900 text-sm font-medium">
           <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-          Payment received â€” activating your plan. This usually takes a few seconds.
+          Payment received — activating your plan. This usually takes a few seconds.
         </div>
       )}
 
@@ -181,7 +188,7 @@ export default function UpgradePage() {
           <p className="mt-1">
             This clears itself once our billing webhook is processed. If it hasn&apos;t updated in a
             few minutes, contact <span className="font-medium">{SUPPORT_EMAIL}</span> and
-            we&apos;ll sort it out â€” you will not be charged twice.
+            we&apos;ll sort it out — you will not be charged twice.
           </p>
         </div>
       )}
@@ -229,7 +236,7 @@ export default function UpgradePage() {
           </CardContent>
         </Card>
 
-        {/* Pro â€” elevated */}
+        {/* Pro — elevated */}
         <Card className="bg-card border-2 border-primary rounded-lg shadow-md">
           <CardHeader className="pb-4 pt-5">
             <div className="flex justify-center -mt-5 mb-3">
@@ -262,7 +269,7 @@ export default function UpgradePage() {
                 ) : (
                   <Sparkles className="h-4 w-4 mr-1.5" />
                 )}
-                {loading ? 'Opening checkoutâ€¦' : 'Upgrade to Pro'}
+                {loading ? 'Opening checkout…' : 'Upgrade to Pro'}
               </Button>
             )}
           </CardContent>

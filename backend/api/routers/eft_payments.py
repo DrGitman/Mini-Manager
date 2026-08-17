@@ -1,5 +1,5 @@
-﻿"""
-EFT payments â€” AI-verified bank transfers for Namibian customers.
+"""
+EFT payments — AI-verified bank transfers for Namibian customers.
 
 Flow:
   1. User claims a plan  -> reference MM-0042 + bank details
@@ -44,7 +44,7 @@ _PLAN_AMOUNTS = {
     "business": settings.eft_amount_business,
 }
 
-# Each proof upload costs a Gemini call, so cap it per user rather than per IP â€”
+# Each proof upload costs a Gemini call, so cap it per user rather than per IP —
 # an IP limit is trivially sidestepped and would not protect the bill.
 _MAX_PROOFS_PER_HOUR = 5
 # Claims expose banking details, so cap how fast one account can mint them.
@@ -195,7 +195,7 @@ async def create_claim(
             "Too many payment requests. Please try again later.",
         )
 
-    # Reuse an open claim rather than minting a new reference each visit â€”
+    # Reuse an open claim rather than minting a new reference each visit —
     # otherwise a customer who reloads the page pays against a stale reference.
     existing = await pool.fetchrow(
         """
@@ -329,7 +329,7 @@ async def upload_proof(
         )
         action = f"Activated {claim['plan']} for user {claim['user_id']}"
         message = (
-            f"Payment verified â€” your {claim['plan'].title()} plan is active. "
+            f"Payment verified — your {claim['plan'].title()} plan is active. "
             "We'll confirm it against our bank statement shortly."
         )
     elif decision.action == "review":
@@ -339,7 +339,7 @@ async def upload_proof(
         )
         action = "Queued for human review"
         message = (
-            "Thanks â€” we've received your proof. Something needs a quick human check, "
+            "Thanks — we've received your proof. Something needs a quick human check, "
             "so your plan will activate shortly."
         )
     else:
@@ -374,7 +374,7 @@ async def upload_proof(
     )
 
     logger.info(
-        "Payment agent: %s for %s (confidence %.2f) â€” %s",
+        "Payment agent: %s for %s (confidence %.2f) — %s",
         decision.action, claim["reference"],
         float(extracted.get("confidence") or 0.0), decision.explain(),
     )
@@ -500,7 +500,7 @@ async def confirm_payment(claim_id: str, user: dict = Depends(get_current_user))
 
 @router.post("/admin/payments/{claim_id}/reject")
 async def reject_payment(claim_id: str, user: dict = Depends(get_current_user)) -> dict:
-    """Money never landed â€” revoke access and downgrade."""
+    """Money never landed — revoke access and downgrade."""
     _require_admin(user)
     pool = get_pool()
     row = await pool.fetchrow(
@@ -510,6 +510,6 @@ async def reject_payment(claim_id: str, user: dict = Depends(get_current_user)) 
     if not row:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown claim")
     await pool.execute("UPDATE users SET plan = 'free' WHERE id = $1", row["user_id"])
-    logger.info("Payment %s rejected by %s â€” user downgraded", row["reference"], user.get("email"))
+    logger.info("Payment %s rejected by %s — user downgraded", row["reference"], user.get("email"))
     return {"ok": True, "status": "rejected"}
 

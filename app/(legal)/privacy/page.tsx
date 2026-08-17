@@ -1,7 +1,7 @@
-﻿import { SUPPORT_EMAIL } from '@/lib/contact'
+import { SUPPORT_EMAIL } from '@/lib/contact'
 
 export const metadata = {
-  title: 'Privacy Policy â€” Mini Manager',
+  title: 'Privacy Policy — Mini Manager',
 }
 
 export default function PrivacyPage() {
