@@ -28,6 +28,7 @@ import {
   Package,
   Globe,
   MessageCircle,
+  Star,
 } from "lucide-react";
 
 // ─── MOTION PRIMITIVES ────────────────────────────────────────────────────────
