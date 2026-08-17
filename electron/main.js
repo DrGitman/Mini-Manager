@@ -225,7 +225,16 @@ function startNextServer() {
   nextServerProcess = require('child_process').fork(serverPath, [], {
     // server.js resolves .next/ and public/ relative to where it runs.
     cwd: path.dirname(serverPath),
-    env: { ...process.env, PORT: '3333', NODE_ENV: 'production' },
+    env: {
+      ...process.env,
+      PORT: '3333',
+      NODE_ENV: 'production',
+      // fork() in Electron re-launches the Electron binary, not Node. Without
+      // this the "child" boots as a second copy of the app, fails the
+      // single-instance lock, and quits — so the server never started and the
+      // window had nothing to load.
+      ELECTRON_RUN_AS_NODE: '1',
+    },
     silent: true,
   })
 

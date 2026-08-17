@@ -41,9 +41,23 @@ export default function LoginPage() {
     if (!isElectron) return
     eAPI.onGoogleAuthSuccess((data: any) => {
       setGoogleLoading(false)
-      const initials = data.name.split(' ').slice(0, 2).map((w: string) => w[0].toUpperCase()).join('')
+
+      // A refused sign-in comes back through the same protocol handler with an
+      // error and no token. Reading data.name here threw on undefined, so the
+      // refusal surfaced as a blank crash instead of the reason.
+      if (!data?.token) {
+        setErrors(prev => ({
+          ...prev,
+          form: data?.message || 'Google sign-in failed. Please try again.',
+        }))
+        return
+      }
+
+      const displayName = data.name || data.email || 'User'
+      const initials = displayName
+        .split(' ').slice(0, 2).map((w: string) => w[0]?.toUpperCase() ?? '').join('')
       saveSession(
-        { name: data.name, email: data.email, avatarInitials: initials, plan: data.plan ?? 'free', joinedAt: Date.now() },
+        { name: displayName, email: data.email, avatarInitials: initials, plan: data.plan ?? 'free', joinedAt: Date.now() },
         data.token,
         true,
       )
