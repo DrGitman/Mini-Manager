@@ -9,7 +9,7 @@ import shutil
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from ..config import settings
@@ -21,6 +21,16 @@ router = APIRouter(tags=["agent"])
 
 _GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions"
 _GROQ_MODEL = settings.groq_model
+
+# Groq rejects oversized requests with 413, and the exact ceiling isn't
+# documented per-plan. Rather than guess it, start modest and retry smaller —
+# the request always succeeds, it just carries less file detail.
+_CONTEXT_BUDGETS = (12_000, 4_000, 0)
+_MAX_FILES_PER_FOLDER = 200
+
+
+class _PayloadTooLarge(Exception):
+    """Groq refused the request as too large — retry with less context."""
 
 # ─── Prompts ──────────────────────────────────────────────────────────────────
 
@@ -291,7 +301,23 @@ async def _call_groq(messages: list[dict], temperature: float = 0.2) -> dict:
             headers={"Authorization": f"Bearer {settings.groq_api_key}", "Content-Type": "application/json"},
             json={"model": _GROQ_MODEL, "messages": messages, "temperature": temperature, "response_format": {"type": "json_object"}},
         )
-        resp.raise_for_status()
+
+        # Distinct type so the caller can retry with a smaller context instead
+        # of failing the user's request.
+        if resp.status_code == 413:
+            raise _PayloadTooLarge()
+        if resp.status_code == 429:
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                "The AI service is rate limited right now. Please try again shortly.",
+            )
+        if resp.status_code >= 400:
+            logger.error("Groq error %s: %s", resp.status_code, resp.text[:400])
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                "The AI service is unavailable right now. Please try again.",
+            )
+
         return json.loads(resp.json()["choices"][0]["message"]["content"])
 
 
@@ -343,17 +369,49 @@ async def agent_chat(
             "Use this to answer questions about files, filter by topic, or build operations.",
             "Format: filename | extension | size | full_path",
         ]
+        # A per-folder cap alone is not enough: many folders, or long paths, still
+        # produce a request Groq rejects with 413. Budget the whole block by
+        # characters and stop cleanly when it is spent.
+        budget = _MAX_CONTEXT_CHARS
+        omitted = 0
+        truncated = False
+
         for folder_entry in body.file_listing:
             folder_name = folder_entry.get("folder", "Unknown")
             files = folder_entry.get("files", [])
-            lines.append(f"\n📁 {folder_name} — {len(files)} files:")
-            for f in files[:200]:  # cap per folder
+            header = f"\n📁 {folder_name} — {len(files)} files:"
+            if budget - len(header) <= 0:
+                truncated = True
+                omitted += len(files)
+                continue
+            lines.append(header)
+            budget -= len(header)
+
+            shown = 0
+            for f in files[:_MAX_FILES_PER_FOLDER]:
                 size_str = f"{f.get('size_kb', 0):.0f}KB"
                 ext = f.get("ext", "")
                 path = f.get("path", f["name"])
-                lines.append(f"  {f['name']} | {ext} | {size_str} | {path}")
-            if len(files) > 200:
-                lines.append(f"  ... {len(files) - 200} more files not shown")
+                line = f"  {f['name']} | {ext} | {size_str} | {path}"
+                if budget - len(line) <= 0:
+                    truncated = True
+                    break
+                lines.append(line)
+                budget -= len(line)
+                shown += 1
+
+            if shown < len(files):
+                omitted += len(files) - shown
+
+        if omitted:
+            lines.append(
+                f"\n  ... {omitted} more files not listed"
+                + (" (context limit reached)" if truncated else "")
+            )
+            lines.append(
+                "  If the user needs those files, ask them to narrow the request to a "
+                "specific folder rather than guessing."
+            )
         context_parts.append("\n".join(lines))
 
     # Keep the file listing OUT of the user's own message. Gluing it on made a
