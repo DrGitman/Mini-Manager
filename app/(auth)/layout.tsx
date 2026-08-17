@@ -5,24 +5,10 @@ import { usePathname } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { REVIEWS } from '@/lib/reviews'
 
-const TESTIMONIALS = [
-  {
-    quote: 'Cut my Downloads folder from 1,847 files to 12 clean folders in 20 minutes. Nothing else comes close.',
-    name: 'Amara K.',
-    role: 'Freelance Designer, Windhoek',
-  },
-  {
-    quote: 'The undo feature alone is worth it. I accidentally moved a whole project folder and got it back in one click.',
-    name: 'Jürgen M.',
-    role: 'Software Engineer, Berlin',
-  },
-  {
-    quote: 'Finally understand my own file structure. The AI naming is scary accurate.',
-    name: 'Thandiwe N.',
-    role: 'Accountant, Johannesburg',
-  },
-]
+// Shared with the upgrade page and the marketing site — edit lib/reviews.ts.
+const TESTIMONIALS = REVIEWS
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
