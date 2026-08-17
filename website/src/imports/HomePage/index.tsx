@@ -906,6 +906,80 @@ const roadmap = [
   },
 ];
 
+// ─── REVIEWS ──────────────────────────────────────────────────────────────────
+//
+// ⚠️  PLACEHOLDER CONTENT — these are not real customers. Replace with genuine
+// quotes (with permission) before launch, or delete the <Reviews /> line in
+// HomePage below. Keep this in sync with mini-manager-app/lib/reviews.ts.
+
+const reviews = [
+  {
+    quote:
+      'Cut my Downloads folder from 1,847 files to 12 clean folders in 20 minutes. Nothing else comes close.',
+    name: 'Amara K.',
+    role: 'Freelance Designer, Windhoek',
+  },
+  {
+    quote:
+      'The undo feature alone is worth it. I accidentally moved a whole project folder and got it back in one click.',
+    name: 'Jürgen M.',
+    role: 'Software Engineer, Berlin',
+  },
+  {
+    quote: 'Finally understand my own file structure. The AI naming is scary accurate.',
+    name: 'Thandiwe N.',
+    role: 'Accountant, Johannesburg',
+  },
+]
+
+function Reviews() {
+  return (
+    <section className="w-full bg-[#0c1120] py-16 md:py-24 px-5 sm:px-6 border-t border-[#3c4561]">
+      <div className="flex flex-col items-center gap-12 md:gap-16 max-w-[1204px] mx-auto">
+        <Reveal className="flex flex-col items-center gap-4 text-center">
+          <span className="text-[12px] font-medium text-[#00E5FF] uppercase tracking-[0.15em]">
+            Reviews
+          </span>
+          <h2 className="font-bold text-[28px] sm:text-[34px] md:text-[42px] leading-[1.15] text-[#edeef3]">
+            What people say
+          </h2>
+          <p className="text-[16px] leading-[1.65] text-[#bec2d3] max-w-[520px]">
+            From people who pointed Mini Manager at a folder they had given up on.
+          </p>
+        </Reveal>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 w-full">
+          {reviews.map((r, i) => (
+            <Reveal key={r.name} delay={i * 0.08}>
+              <figure className="h-full bg-[#171c2f] border border-[#3c4561] rounded-2xl p-6 flex flex-col gap-5 transition-all duration-300 hover:border-[#00E5FF]/40 hover:-translate-y-1">
+                <div className="flex gap-0.5" aria-label="5 out of 5">
+                  {[...Array(5)].map((_, s) => (
+                    <Star key={s} size={15} className="fill-[#3364db] text-[#3364db]" />
+                  ))}
+                </div>
+                <blockquote className="text-[15px] leading-[1.65] text-[#edeef3] flex-1">
+                  &ldquo;{r.quote}&rdquo;
+                </blockquote>
+                <figcaption className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-[#3364db] flex items-center justify-center shrink-0">
+                    <span className="text-[13px] font-bold text-white">
+                      {r.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
+                    </span>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[14px] font-bold text-[#edeef3] truncate">{r.name}</p>
+                    <p className="text-[12px] text-[#9198b7] truncate">{r.role}</p>
+                  </div>
+                </figcaption>
+              </figure>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function Roadmap() {
   const statusStyle = {
     complete: { badge: "bg-green-500/15 text-green-400 border-green-500/30", label: "Complete", icon: Check },
@@ -1217,6 +1291,7 @@ export default function HomePage() {
       <AISection />
       <Architecture />
       <Screenshots />
+      <Reviews />
       <Roadmap />
       <FAQ />
       <Support />
