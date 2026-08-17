@@ -34,6 +34,11 @@ CREATE INDEX IF NOT EXISTS scans_user_id_idx ON scans (user_id, created_at DESC)
 -- fingerprint = sha256(lower(filename) || lower(extension) || size_bytes::text)
 CREATE TABLE IF NOT EXISTS classification_cache (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    -- Scoped per user. A fingerprint is only sha256(name + extension + size),
+    -- so without this column two accounts owning a file with the same name and
+    -- size share a row — and the stored target_folder is often named after a
+    -- client or project. See migrations/008_scope_cache_to_user.sql.
+    user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     fingerprint   VARCHAR(64) NOT NULL,
     filename      TEXT NOT NULL,
     extension     TEXT NOT NULL,
@@ -45,7 +50,9 @@ CREATE TABLE IF NOT EXISTS classification_cache (
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS classification_cache_fingerprint_idx ON classification_cache (fingerprint);
+CREATE UNIQUE INDEX IF NOT EXISTS classification_cache_user_fingerprint_idx
+    ON classification_cache (user_id, fingerprint);
+CREATE INDEX IF NOT EXISTS classification_cache_user_idx ON classification_cache (user_id);
 
 -- ─── Token Log ────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS token_log (

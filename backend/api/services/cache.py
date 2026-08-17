@@ -18,13 +18,17 @@ def _fingerprint(file: FileItem) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
-async def lookup_cache(files: list[FileItem]) -> tuple[
+async def lookup_cache(files: list[FileItem], user_id: str) -> tuple[
     list[ClassificationResult],   # cache hits
     list[FileItem],               # misses
 ]:
     """
-    Batch-checks the classification_cache table.
-    Returns (hits, misses).
+    Batch-checks the classification_cache table for THIS user.
+
+    The user_id is required, not optional. Without it in the WHERE clause the
+    cache is global, and a shared row hands one account the category and target
+    folder another account's files were given — a target folder is frequently
+    named after a client or project.
     """
     if not files:
         return [], []
@@ -37,8 +41,10 @@ async def lookup_cache(files: list[FileItem]) -> tuple[
         """
         SELECT fingerprint, category, new_name, target_folder, confidence, source
         FROM   classification_cache
-        WHERE  fingerprint = ANY($1::varchar[])
+        WHERE  user_id = $1
+          AND  fingerprint = ANY($2::varchar[])
         """,
+        user_id,
         fingerprints,
     )
 
@@ -73,16 +79,16 @@ async def lookup_cache(files: list[FileItem]) -> tuple[
     return hits, misses
 
 
-async def store_cache(file: FileItem, result: ClassificationResult) -> None:
-    """Upsert a single classification result into the cache."""
+async def store_cache(file: FileItem, result: ClassificationResult, user_id: str) -> None:
+    """Upsert a single classification result into this user's cache."""
     fp = _fingerprint(file)
     pool = get_pool()
     await pool.execute(
         """
         INSERT INTO classification_cache
-            (fingerprint, filename, extension, category, new_name, target_folder, confidence, source)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        ON CONFLICT (fingerprint) DO UPDATE SET
+            (user_id, fingerprint, filename, extension, category, new_name, target_folder, confidence, source)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ON CONFLICT (user_id, fingerprint) DO UPDATE SET
             category      = EXCLUDED.category,
             new_name      = EXCLUDED.new_name,
             target_folder = EXCLUDED.target_folder,
@@ -90,6 +96,7 @@ async def store_cache(file: FileItem, result: ClassificationResult) -> None:
             source        = EXCLUDED.source,
             created_at    = NOW()
         """,
+        user_id,
         fp,
         file.name,
         file.extension,
@@ -104,8 +111,9 @@ async def store_cache(file: FileItem, result: ClassificationResult) -> None:
 async def store_cache_batch(
     files: list[FileItem],
     results: list[ClassificationResult],
+    user_id: str,
 ) -> None:
-    """Bulk upsert all AI results into cache."""
+    """Bulk upsert all AI results into this user's cache."""
     if not files or not results:
         return
 
@@ -116,4 +124,4 @@ async def store_cache_batch(
         async with conn.transaction():
             for result in results:
                 if result.id in id_to_file:
-                    await store_cache(id_to_file[result.id], result)
+                    await store_cache(id_to_file[result.id], result, user_id)

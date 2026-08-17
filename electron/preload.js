@@ -22,6 +22,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('scan-directory', dirPath),
 
   /**
+   * The user's real Downloads / Desktop / Documents paths.
+   * @returns {{ home: string|null, downloads: string|null, desktop: string|null, documents: string|null }}
+   */
+  getUserPaths: () =>
+    ipcRenderer.invoke('get-user-paths'),
+
+  /**
    * Move/rename a file using native fs.rename (fast, atomic on same volume).
    * Automatically creates target directories.
    */

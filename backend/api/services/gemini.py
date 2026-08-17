@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from typing import Any, Optional
 
 from google import genai
@@ -137,6 +138,26 @@ SENSITIVITY RULES (set the "sensitivity" field):
 High sensitivity → warn the user before moving. When in doubt → "none"."""
 
 
+# Files whose whole purpose is holding credentials. The desktop app stops
+# reading these at the source, but an already-installed older build still sends
+# previews for them, so the content is dropped here before it can reach the AI.
+_SECRET_NAME_RE = re.compile(
+    r"(^\.env|\.env$|\.env\.|^id_[rd]sa|\.pem$|\.key$|\.pfx$|\.p12$"
+    r"|\.keystore$|\.ppk$|credential|secret|password|\.htpasswd|\.netrc"
+    r"|\.npmrc|\.pgpass)",
+    re.IGNORECASE,
+)
+
+
+def _safe_preview(file: FileItem) -> str:
+    """The file's preview, or nothing at all if the name says it holds secrets."""
+    if not file.content_preview:
+        return ""
+    if _SECRET_NAME_RE.search(file.name or ""):
+        return ""
+    return file.content_preview
+
+
 async def classify_batch(
     files: list[FileItem],
     user_id: Optional[str],
@@ -156,7 +177,7 @@ async def classify_batch(
             "ext": f.extension,
             "size": f.size,
             **({"currentPath": f.relative_path} if f.relative_path else {}),
-            **({"preview": f.content_preview[:500]} if f.content_preview else {}),
+            **({"preview": _safe_preview(f)[:500]} if _safe_preview(f) else {}),
         }
         for f in files
     ]

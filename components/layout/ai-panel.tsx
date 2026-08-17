@@ -12,7 +12,11 @@ import {
 import { BouncingDots } from '@/components/ui/bouncing-dots'
 import { cn } from '@/lib/utils'
 import { timeAgo } from '@/lib/types'
-import { apiAgent, apiGetPreferences } from '@/lib/api'
+import { apiAgent } from '@/lib/api'
+import {
+  type AgentContext, buildAgentContext, clearDigests, hasDigests,
+  refreshFolder, refreshStale, resolveWatchedFolder, warmWatchedFolders,
+} from '@/lib/folder-digests'
 import type { AgentStep, AgentQuestion } from '@/lib/api'
 import { getSession } from '@/lib/session'
 
@@ -622,56 +626,45 @@ const SUGGESTIONS = [
 
 // ─── Scan scope helpers ───────────────────────────────────────────────────────
 
-interface FileListing {
-  folder: string
-  files: { name: string; ext: string; size_kb: number; path: string }[]
+/** Phrasings that mean "go and look at the disk again", not "chat with me". */
+const RESCAN_RE = /\b(re-?scan|scan|refresh|check again|look again|update the scan)\b/i
+
+/**
+ * Which folder the user meant, if they named one.
+ * Returns null for "rescan everything", which then refreshes all of them.
+ */
+function extractFolderTarget(text: string): string | null {
+  const m = text.match(/\b(?:scan|rescan|refresh|check)\s+(?:my\s+|the\s+)?([\w .\\/:-]+?)(?:\s+folder)?\s*[?.!]?$/i)
+  const target = m?.[1]?.trim()
+  if (!target) return null
+  if (/^(everything|all|it|again|them|my files|files)$/i.test(target)) return null
+  return target
 }
 
-async function buildFileListing(): Promise<FileListing[]> {
-  if (!isElectron) return []
+/**
+ * Rebuild the agent's view of the user's folders when it has gone stale.
+ *
+ * This used to rescan every watched folder on every message, sending the first
+ * 300 filenames of each and no totals — slow, and it made the model count the
+ * sample instead of the folder. Digests are cached and carry complete counts;
+ * see lib/folder-digests.ts.
+ */
+async function refreshAgentContext(force = false): Promise<AgentContext | null> {
+  if (!isElectron) return null
+  const session = getSession()
+  if (!session) return null
+  const userId = session.email
+
   try {
-    const prefs = await apiGetPreferences()
-    const session = getSession()
-    const username = session?.name?.split(' ')[0] ?? 'User'
-
-    // Build list of scope paths
-    const scopePaths: string[] = []
-    const platform = eAPI?.platform ?? 'win32'
-    const home = platform === 'win32'
-      ? `C:\\Users\\${username}`
-      : `/Users/${username}`
-
-    if (prefs.monitor_downloads) scopePaths.push(platform === 'win32' ? `${home}\\Downloads` : `${home}/Downloads`)
-    if (prefs.monitor_desktop) scopePaths.push(platform === 'win32' ? `${home}\\Desktop` : `${home}/Desktop`)
-    if (prefs.monitor_documents) scopePaths.push(platform === 'win32' ? `${home}\\Documents` : `${home}/Documents`)
-    for (const f of prefs.custom_folders ?? []) {
-      if (f) scopePaths.push(f)
+    if (!hasDigests()) {
+      await warmWatchedFolders(userId)
+    } else {
+      await refreshStale(force)
     }
-
-    if (scopePaths.length === 0) return []
-
-    // Scan each folder
-    const listings: FileListing[] = []
-    for (const folderPath of scopePaths) {
-      try {
-        const { files } = await eAPI.scanDirectory(folderPath)
-        const folderName = folderPath.split(/[\\/]/).pop() ?? folderPath
-        listings.push({
-          folder: `${folderName} (${folderPath})`,
-          files: files.slice(0, 300).map((f: any) => ({
-            name: f.name,
-            ext: f.extension,
-            size_kb: Math.round((f.sizeBytes ?? 0) / 1024),
-            path: f.absolutePath ?? f.relativePath ?? f.name,
-          })),
-        })
-      } catch {
-        // folder doesn't exist or no access — skip silently
-      }
-    }
-    return listings
-  } catch {
-    return []
+    return buildAgentContext(userId)
+  } catch (err) {
+    console.error('[agent] could not build folder context', err)
+    return null
   }
 }
 
@@ -699,7 +692,33 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const transcriptRef = useRef('')
-  const scopeListingRef = useRef<FileListing[]>([])
+
+  // Warm the folder digests once, in the background, so the first question the
+  // user asks is answered from real data instead of triggering a cold scan.
+  // Digests are dropped whenever the account changes — one user's scan must
+  // never be visible to the next.
+  useEffect(() => {
+    let cancelled = false
+    const session = getSession()
+    if (!session || !isElectron) return
+
+    const userId = session.email
+    warmWatchedFolders(userId).catch(err =>
+      console.error('[agent] could not warm watched folders', err))
+
+    const onSessionChange = () => {
+      clearDigests()
+      const next = getSession()
+      if (next && !cancelled) {
+        warmWatchedFolders(next.email).catch(() => {})
+      }
+    }
+    window.addEventListener('mm:session-change', onSessionChange)
+    return () => {
+      cancelled = true
+      window.removeEventListener('mm:session-change', onSessionChange)
+    }
+  }, [])
 
   // Autosize textarea
   useEffect(() => {
@@ -829,24 +848,59 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
     setThinking(true)
 
     try {
-      // Refresh file listing on every send so agent always has current file state
-      const fileListing = await buildFileListing()
-      scopeListingRef.current = fileListing
+      const wantsRescan = RESCAN_RE.test(txt)
+      let context = await refreshAgentContext(wantsRescan)
 
       const apiHistory = history.map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text }))
-      const res = await apiAgent(apiHistory, undefined, fileListing.length > 0 ? fileListing : undefined)
-      const hasTask = (res.steps ?? []).length > 0
+      const res = await apiAgent(apiHistory, undefined, undefined, context)
       const questions = res.questions ?? []
 
+      // "Task complete" may only come from work that actually ran. Steps the
+      // model wrote itself are narration, and are shown without the chip.
       setMessages(prev => [...prev, {
         id: `ai-${Date.now()}`, role: 'ai', text: res.reply, ts: Date.now(),
-        status: hasTask ? 'complete' : undefined,
+        status: res.executed ? 'complete' : undefined,
         steps: res.steps ?? [],
       }])
 
       // If clarification needed, open the docked palette
       if (res.needs_clarification && questions.length > 0 && questions.some(q => (q.options ?? []).length > 0)) {
         setPalette({ questions, page: 0, cursor: 0, answers: [] })
+        return
+      }
+
+      // A scan on its own answers nothing — the user asked a question. Feed the
+      // fresh folder data back so the reply becomes "Done. You have 200 images
+      // — 84 JPG, 116 PNG" instead of a bare "Done · 1 step".
+      if (wantsRescan && !res.needs_clarification) {
+        const target = extractFolderTarget(txt)
+        const steps: string[] = []
+        if (target) {
+          const match = resolveWatchedFolder(target)
+          if (match) {
+            const d = await refreshFolder(match.path, match.label)
+            steps.push(`${d.label}: ${d.total_files} files`)
+          }
+        } else {
+          const touched = await refreshStale(true)
+          if (touched.length) steps.push(`Rescanned ${touched.join(', ')}`)
+        }
+
+        const session = getSession()
+        context = session ? buildAgentContext(session.email) : null
+
+        if (context && steps.length) {
+          const followUp = await apiAgent(
+            [...apiHistory, { role: 'assistant', content: res.reply }],
+            undefined, undefined, context,
+            { summary: steps.join('; '), steps },
+          )
+          setMessages(prev => [...prev, {
+            id: `ai-f-${Date.now()}`, role: 'ai', text: followUp.reply, ts: Date.now(),
+            status: 'complete',
+            steps: steps.map(s => ({ label: s, status: 'done' })) as AgentStep[],
+          }])
+        }
       }
     } catch {
       setMessages(prev => [...prev, {

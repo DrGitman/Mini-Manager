@@ -25,8 +25,10 @@ win:
     - target: nsis
       arch:
         - x64
-  # Run as regular user — no UAC popup for user directories (Downloads, Desktop, etc.)
-  requestedExecutionLevel: asUser
+  # Run as the invoking user — no UAC prompt for their own folders
+  # (Downloads, Desktop, Documents). "asUser" is not a valid value here;
+  # electron-builder only accepts asInvoker / highestAvailable / requireAdministrator.
+  requestedExecutionLevel: asInvoker
 
 nsis:
   oneClick: false

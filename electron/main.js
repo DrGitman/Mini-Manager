@@ -11,11 +11,25 @@ const crypto = require('crypto')
 const isDev = !app.isPackaged
 
 // ─── Text extensions we can read for content previews ─────────────────────────
+// A preview is the first 400 bytes of the file, and it is sent to the AI to
+// improve classification. So this list decides what leaves the machine — it is
+// a privacy boundary, not a convenience list.
+//
+// .env was here, which meant a scan of any project folder uploaded the top of
+// every .env file — API keys and database passwords — to a third party. File
+// types whose whole purpose is holding credentials are excluded, and
+// SECRET_NAME_RE catches the ones identifiable by name instead.
 const TEXT_EXTS = new Set([
   '.txt', '.md', '.markdown', '.json', '.csv', '.log', '.yaml', '.yml',
   '.xml', '.html', '.htm', '.js', '.ts', '.jsx', '.tsx', '.py', '.css',
-  '.ini', '.cfg', '.conf', '.toml', '.env', '.sh', '.bat', '.sql',
+  '.toml', '.sql',
 ])
+
+/**
+ * Files we never read, whatever their extension.
+ * Keys, certificates, credential stores and anything named like a secret.
+ */
+const SECRET_NAME_RE = /(^\.env|\.env$|\.env\.|^id_[rd]sa|\.pem$|\.key$|\.pfx$|\.p12$|\.keystore$|\.ppk$|credential|secret|password|\.htpasswd|\.netrc|\.npmrc|\.pgpass)/i
 
 // ─── Window ──────────────────────────────────────────────────────────────────
 
@@ -198,7 +212,7 @@ function walkDir(dirPath, relPath, files, folders, maxFiles) {
       const ext = path.extname(entry.name).toLowerCase()
       let contentPreview = ''
 
-      if (TEXT_EXTS.has(ext) && stat.size < 500_000) {
+      if (TEXT_EXTS.has(ext) && stat.size < 500_000 && !SECRET_NAME_RE.test(entry.name)) {
         try {
           const buf = Buffer.alloc(400)
           const fd = fs.openSync(fullPath, 'r')
@@ -229,6 +243,27 @@ ipcMain.handle('scan-directory', async (_, dirPath) => {
   const folders = []
   walkDir(dirPath, '', files, folders, 500)
   return { files, folders }
+})
+
+/**
+ * The real location of the user's own folders.
+ *
+ * These used to be guessed by sticking the first word of the account's display
+ * name onto "C:\Users\". That is wrong whenever the Windows profile folder
+ * differs from the display name, which is most of the time — the agent then
+ * scanned a path that does not exist and reported an empty folder.
+ * app.getPath knows the actual, redirected-aware locations.
+ */
+ipcMain.handle('get-user-paths', async () => {
+  const safe = (name) => {
+    try { return app.getPath(name) } catch { return null }
+  }
+  return {
+    home: safe('home'),
+    downloads: safe('downloads'),
+    desktop: safe('desktop'),
+    documents: safe('documents'),
+  }
 })
 
 // ─── IPC: Move file ───────────────────────────────────────────────────────────

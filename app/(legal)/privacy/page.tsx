@@ -30,17 +30,39 @@ export default function PrivacyPage() {
         <h3 className="text-sm font-medium text-foreground mt-4 mb-2">1.2 File Metadata</h3>
         <p>
           To generate organization suggestions, the Service reads metadata from files on your local device.
-          This includes file names, extensions, sizes, creation dates, and directory paths. This metadata may
-          be transmitted to our AI inference provider (Google Gemini API) to produce suggestions.
+          This includes file names, extensions, sizes, modification dates, and directory paths. This metadata
+          is transmitted to our AI providers (Google Gemini and Groq) to produce suggestions, and is stored
+          against your account so we can remember your corrections and let you undo changes.
         </p>
         <div className="mt-3 p-3 bg-primary/5 border border-primary/15 rounded-lg">
-          <p className="text-sm font-medium text-foreground">Important: We never read or transmit file contents.</p>
+          <p className="text-sm font-medium text-foreground">
+            We do not upload your files. We do read a short preview of plain-text files.
+          </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Only metadata (names, sizes, dates, paths) is ever sent to external services. The actual contents
-            of your documents, images, videos, and other files remain entirely on your local device and are
-            never accessed or uploaded by Mini Manager.
+            Your files are never uploaded or stored by us. The contents of your documents, images, videos,
+            archives and other binary files are never read.
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            There is one exception, and we want to be precise about it. For plain-text files smaller than
+            500&nbsp;KB — such as .txt, .md, .csv, .json, .log and source code — the app reads the first
+            400 characters and includes them with the metadata sent to our AI providers. This lets us tell a
+            meeting note apart from a shopping list when the filename alone is ambiguous. We never read past
+            those first 400 characters, and we do not store the preview after the suggestion is produced.
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Files that typically hold credentials are never previewed at all, whatever their size — this
+            includes .env files, private keys and certificates (.pem, .key, .pfx, .p12), SSH keys, and any
+            file whose name contains &ldquo;secret&rdquo;, &ldquo;password&rdquo; or &ldquo;credential&rdquo;.
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            When you explicitly choose <strong>Explain</strong> on a single document, more of that one
+            document is sent so it can be summarised for you. This never happens automatically or in bulk.
           </p>
         </div>
+        <p className="mt-3">
+          Your file metadata is stored against your account alone. It is never shared with, or visible to,
+          other users. When you delete your account, all of it is removed — see section 6.
+        </p>
 
         <h3 className="text-sm font-medium text-foreground mt-4 mb-2">1.3 Usage Data</h3>
         <p>
@@ -78,12 +100,16 @@ export default function PrivacyPage() {
 
       <Section title="3. AI and Third-Party Inference Services">
         <p>
-          Mini Manager uses the Google Gemini API to analyze file metadata and generate organization
-          suggestions. When you initiate an AI scan:
+          Mini Manager uses the Google Gemini API and the Groq API to analyze file metadata and generate
+          organization suggestions. Groq is used for bulk classification and as a fallback when Gemini is
+          unavailable. When you initiate an AI scan:
         </p>
         <ul className="list-disc pl-5 mt-2 space-y-1.5">
-          <li>File names, paths, sizes, and dates from your selected folder are sent to the Gemini API.</li>
-          <li>Google processes this metadata to return categorization and naming suggestions.</li>
+          <li>
+            File names, paths, sizes, and modification dates from your selected folder are sent to these
+            providers, along with a 400-character preview of plain-text files as described in section 1.2.
+          </li>
+          <li>They process this data to return categorization and naming suggestions.</li>
           <li>
             Google&apos;s use of data submitted through API calls is governed by the{' '}
             <a

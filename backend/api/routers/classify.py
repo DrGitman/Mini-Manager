@@ -106,7 +106,7 @@ async def classify_files(
     heuristic_results, needs_lookup = heuristics_svc.run_heuristics(files)
 
     # ── Step 2: Cache lookup ───────────────────────────────────────────────────
-    cache_hits, needs_ai = await cache_svc.lookup_cache(needs_lookup)
+    cache_hits, needs_ai = await cache_svc.lookup_cache(needs_lookup, user_id)
 
     # ── Step 3: Budget check ───────────────────────────────────────────────────
     ai_results = []
@@ -140,7 +140,7 @@ async def classify_files(
             )
 
         # ── Step 5: Cache store ────────────────────────────────────────────────
-        await cache_svc.store_cache_batch(needs_ai, ai_results)
+        await cache_svc.store_cache_batch(needs_ai, ai_results, user_id)
 
     all_results = heuristic_results + cache_hits + ai_results
 

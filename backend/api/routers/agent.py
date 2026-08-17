@@ -225,6 +225,61 @@ CONVERSATION RULES (check these FIRST, before anything else):
 
 "reply" must never be empty. Always say something to the user.
 
+WHAT YOU CAN AND CANNOT SEE — this matters more than anything else here.
+
+You may ONLY state facts present in the FILE CONTEXT. For each file you are given
+its filename, extension, size, last-modified date, and full path. Nothing else.
+
+COMPLETE FIGURES vs SAMPLES — get this wrong and you will state a wrong number
+about files the user can see for themselves, which destroys their trust instantly.
+- Anything the context labels COMPLETE — totals, per-type counts, folder counts —
+  is exact for every file. Use these, and ONLY these, to answer "how many" or
+  "how much space".
+- Anything labelled SAMPLE is a short excerpt. NEVER count a sample to answer a
+  total. "Largest 15" tells you what the biggest files are, not how many exist.
+- If a listing says it was truncated, the complete figures are still exact, but
+  say your list of NAMES is partial.
+
+You CAN answer, from that data:
+- How many files / of a given type / what types are present — from the complete counts
+- Total or individual sizes, biggest files, space used by a category
+- Anything about NAMES: contains "invoice", starts with IMG_, has "(1)", no extension
+- Which folder something is in
+- Dates from the last-modified date: what changed recently, what is old, what has
+  been sitting untouched. Say "last changed on", not "downloaded on" — the date is
+  when the file was last modified, which is not always when it arrived.
+
+You CANNOT answer these, because the data is not there:
+- What is INSIDE any file. You have the filename, not the contents.
+- When something was originally created or downloaded, as opposed to modified
+- Whether a file is "final", "important", "still needed", or "already sent"
+- What is inside a zip, or whether anything is a virus
+- Anything about other people, other devices, or email
+
+This context belongs to ONE user. Never mention files, folders or habits from
+anyone else, and never generalise — no "most people", no "users typically".
+Answer only from this person's own data.
+
+If there is no FILE CONTEXT at all, say you haven't scanned anything yet and offer
+to scan. Never describe a folder you have not been given.
+
+NEVER infer contents from a filename. "contract_final_v3.pdf" tells you someone
+named a file that. It does not tell you what the contract says, or that it is final.
+
+When asked something you cannot answer, say what you DO know and what it would
+take to answer properly. For example:
+  "I can see contract_final_v3.pdf — 2.1 MB, in Documents. I haven't read it,
+   so I can't tell you what's in it. Open it in the app and I'll explain it."
+  "I can see when files were last changed, but not when you first downloaded
+   them. Going by last-changed, three files in Downloads were touched this week."
+
+A precise "I can see X but not Y" is always better than a confident guess. Guessing
+about someone's own files destroys their trust in everything else you say.
+
+If your file list was truncated (it will say so), say your count is for the files
+you can see and may not be the whole folder. Do not present a partial count as
+complete.
+
 FILE CONTEXT RULES:
 - If a FILE CONTEXT block is present, use it to answer questions about what files exist.
 - When asked to filter or find files by TOPIC (e.g. "school files", "work files", "photos from last year"):
@@ -651,6 +706,13 @@ class AgentRequest(BaseModel):
     messages: list[AgentMessage]
     folder_context: Optional[str] = None
     file_listing: Optional[list[dict]] = None  # [{folder, files: [{name, ext, size_kb, path}]}]
+    # The desktop app's digest of every watched folder: complete counts plus
+    # small samples. Preferred over file_listing, which had no totals and made
+    # the model count the sample it was handed instead of the folder.
+    scan_context: Optional[dict] = None
+    # Set on the follow-up turn after a scan actually ran, so the reply can be
+    # "you have 200 images" rather than a bare "done".
+    task_result: Optional[dict] = None
     # The desktop app sets this. The user's files live on their machine, so a
     # hosted backend cannot act on them — it plans, and the client executes.
     # Defaults to False so a locally-run backend keeps working as before.
@@ -678,6 +740,103 @@ class AgentResponse(BaseModel):
 
 # ─── File context ─────────────────────────────────────────────────────────────
 
+def _fmt_size(b: int) -> str:
+    for unit in ("B", "KB", "MB", "GB"):
+        if b < 1024 or unit == "GB":
+            return f"{b:.0f}{unit}" if unit == "B" else f"{b:.1f}{unit}"
+        b /= 1024.0
+    return f"{b:.1f}GB"
+
+
+def _build_scan_context(ctx: dict, budget: int) -> str:
+    """
+    Render the desktop app's folder digest.
+
+    Complete figures and partial samples are labelled separately and loudly.
+    A model handed a 15-row "largest files" sample will otherwise answer "how
+    many images do I have" by counting that sample — a wrong number, stated
+    confidently, about files the user can see for themselves.
+    """
+    folders = ctx.get("watched_folders") or []
+    totals = ctx.get("totals") or {}
+    unreadable = ctx.get("unreadable_folders") or []
+
+    if not folders and not unreadable:
+        return (
+            "FILE CONTEXT: no folders are being watched yet. Say so and offer to "
+            "add one in Settings, or to scan a folder now. Do NOT invent a folder "
+            "or describe files you have not been given."
+        )
+
+    lines = [
+        "FILE CONTEXT — the user's watched folders, scanned on their machine.",
+        "",
+        "COMPLETE FIGURES (true for every file, use these for any total):",
+        f"  Files in total: {totals.get('total_files', 0)}",
+        f"  Size in total: {_fmt_size(totals.get('total_bytes', 0))}",
+        f"  Folders watched: {totals.get('folder_count', 0)}",
+        f"  Unchanged in over a year: {totals.get('stale_count', 0)}",
+    ]
+
+    by_ext = totals.get("by_extension") or {}
+    if by_ext:
+        ranked = sorted(by_ext.items(), key=lambda kv: -kv[1].get("count", 0))
+        lines.append("  Every file type across all folders (complete counts):")
+        for ext, v in ranked[:40]:
+            lines.append(f"    .{ext}: {v.get('count', 0)} files, {_fmt_size(v.get('bytes', 0))}")
+
+    for f in folders:
+        lines.append("")
+        lines.append(f"📁 {f.get('label')} — {f.get('root')}")
+        lines.append(
+            f"  COMPLETE: {f.get('total_files', 0)} files, "
+            f"{_fmt_size(f.get('total_bytes', 0))}, "
+            f"{f.get('stale_count', 0)} unchanged in over a year, "
+            f"{f.get('empty_count', 0)} empty"
+        )
+        fext = f.get("by_extension") or {}
+        if fext:
+            ranked = sorted(fext.items(), key=lambda kv: -kv[1].get("count", 0))
+            inline = ", ".join(f".{e} × {v.get('count', 0)}" for e, v in ranked[:15])
+            lines.append(f"  Types (complete): {inline}")
+
+        if f.get("all_files"):
+            lines.append(f"  Every file in this folder ({len(f['all_files'])} of {f.get('total_files', 0)}):")
+            for x in f["all_files"]:
+                lines.append(f"    {x.get('n')} | {_fmt_size(x.get('s', 0))} | {x.get('m') or 'no date'}")
+        else:
+            lines.append(
+                f"  This folder has {f.get('total_files', 0)} files — too many to list. "
+                "The samples below are PARTIAL. Never count them."
+            )
+            for key, title in (("sample_largest", "Largest"), ("sample_newest", "Newest"), ("sample_oldest", "Oldest")):
+                rows = f.get(key) or []
+                if rows:
+                    lines.append(f"  {title} (SAMPLE, not a total):")
+                    for x in rows:
+                        lines.append(f"    {x.get('n')} | {_fmt_size(x.get('s', 0))} | {x.get('m') or 'no date'}")
+
+    for u in unreadable:
+        lines.append(f"\n⚠ Could not read {u.get('root')}: {u.get('error')}")
+        lines.append("  If the question covers this folder, say you couldn't read it and why.")
+
+    if ctx.get("any_stale"):
+        lines.append(
+            f"\nThese scans are from {ctx.get('oldest_scan')} and may be out of date. "
+            "You may still answer, but mention when it was scanned and offer to rescan."
+        )
+
+    out = "\n".join(lines)
+    if budget > 0 and len(out) > budget:
+        # Trim file rows from the end; the complete figures at the top survive,
+        # so totals stay correct even in a heavily truncated context.
+        out = out[:budget] + (
+            "\n  ... listing truncated. The COMPLETE FIGURES above are still exact — "
+            "use them for counts. Say your list of names is partial."
+        )
+    return out
+
+
 def _build_file_context(file_listing: list[dict], budget: int) -> str:
     """
     Render the file listing within a character budget.
@@ -698,6 +857,13 @@ def _build_file_context(file_listing: list[dict], budget: int) -> str:
         "FILE CONTEXT (real files from the user's scan scope folders):",
         "Use this to answer questions about files, filter by topic, or build operations.",
         "Format: filename | extension | size | full_path",
+        # Older desktop builds send this shape, which carries no dates and no
+        # folder totals. Say so rather than answering from the general rules,
+        # which assume the newer digest.
+        "NOTE: this listing has NO dates and NO complete totals — it is a partial "
+        "list. You cannot answer questions about when files changed, and any count "
+        "you give is 'at least N, from what I can see'. Suggest they update the app "
+        "for exact counts.",
     ]
     remaining = budget
     omitted = 0
@@ -757,8 +923,21 @@ async def agent_chat(
         word, and the model answered the listing instead of the greeting.
         """
         parts = list(context_parts)
-        if body.file_listing:
+        # The digest carries complete counts, so it wins when both are present.
+        if body.scan_context:
+            parts.append(_build_scan_context(body.scan_context, budget))
+        elif body.file_listing:
             parts.append(_build_file_context(body.file_listing, budget))
+
+        if body.task_result:
+            steps = "; ".join(body.task_result.get("steps") or [])
+            parts.append(
+                "JUST COMPLETED: "
+                f"{body.task_result.get('summary', 'a scan')}"
+                + (f" ({steps})" if steps else "")
+                + ". The file context above is the fresh result. Answer the user's "
+                "original question now, with real numbers — do not just say it is done."
+            )
 
         msgs: list[dict] = [{"role": "system", "content": _AGENT_SYSTEM}]
         if parts:

@@ -265,12 +265,21 @@ export async function apiAgent(
   messages: { role: string; content: string }[],
   folderContext?: string,
   fileListing?: { folder: string; files: { name: string; ext: string; size_kb: number; path: string }[] }[],
+  scanContext?: unknown,
+  taskResult?: { summary: string; steps: string[] },
 ): Promise<{
   reply: string
   steps?: AgentStep[]
   needs_clarification?: boolean
   questions?: AgentQuestion[]
   operations?: AgentOperation[]
+  /**
+   * True only when operations actually ran on this machine and returned
+   * results. The UI binds its "Task complete" chip to this, never to the
+   * model's reply — otherwise the model narrating "I'll scan your Downloads
+   * folder" renders as a finished task that never happened.
+   */
+  executed?: boolean
 }> {
   const clientExecution = hasElectron()
 
@@ -286,9 +295,40 @@ export async function apiAgent(
       messages,
       folder_context: folderContext ?? null,
       file_listing: fileListing ?? null,
+      scan_context: scanContext ?? null,
+      task_result: taskResult ?? null,
       client_execution: clientExecution,
     }),
   })
+
+  // Operations that change or remove files must not run without the user
+  // agreeing first. There is no confirmation step in the chat panel yet, so
+  // these are shown as a plan instead of being executed.
+  const NEEDS_CONFIRMATION = new Set([
+    'move_files', 'move_folder', 'move_file',
+    'delete_file', 'delete_folder_recursive',
+    'permanently_delete_file', 'permanently_delete_folder',
+    'rename', 'organize_by_type',
+  ])
+
+  if (clientExecution && res.operations?.length) {
+    const risky = res.operations.filter(o => NEEDS_CONFIRMATION.has(o.type))
+    if (risky.length) {
+      return {
+        ...res,
+        reply:
+          `${res.reply}\n\nI've prepared these changes but haven't applied them. ` +
+          `Use the Organize page to review and apply file changes — it shows you ` +
+          `every move before anything happens.`,
+        // 'pending', and executed stays false — nothing has happened yet.
+        executed: false,
+        steps: risky.map(o => ({
+          label: `Planned: ${o.type.replace(/_/g, ' ')} ${o.path ?? o.source ?? ''}`.trim(),
+          status: 'pending',
+        })) as AgentStep[],
+      }
+    }
+  }
 
   // Run the plan on this machine and fold the outcome back into the steps, so
   // the panel reports what actually happened rather than what was intended.
@@ -297,14 +337,19 @@ export async function apiAgent(
       const results = await window.electronAPI!.runOperations(res.operations)
       return {
         ...res,
+        // A real handler returned real results — this is the only place
+        // executed becomes true.
+        executed: results.length > 0,
         steps: results.map(r => ({
           label: r.detail,
           status: r.status === 'done' ? 'done' : 'failed',
         })) as AgentStep[],
       }
     } catch (err) {
+      console.error('[agent] operations failed', err)
       return {
         ...res,
+        executed: false,
         steps: [{
           label: err instanceof Error ? err.message : 'Could not apply the changes',
           status: 'failed',
@@ -313,7 +358,9 @@ export async function apiAgent(
     }
   }
 
-  return res
+  // No operations came back, so nothing ran. Any steps here are the model
+  // describing intent, and the panel renders them as narration only.
+  return { ...res, executed: false }
 }
 
 // ─── Notifications ────────────────────────────────────────────────────────────

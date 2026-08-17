@@ -255,10 +255,9 @@ export default function ProfilePage() {
   }
 
   async function handleDeleteConfirm() {
-    if (!deletePassword) {
-      setDeleteError('Enter your password to confirm')
-      return
-    }
+    // Don't demand a password here — Google accounts don't have one, and the
+    // server decides what confirmation it needs. Blocking client-side made it
+    // impossible for those users to delete their account at all.
     setDeleting(true)
     setDeleteError(null)
     try {

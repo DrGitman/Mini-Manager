@@ -6,9 +6,29 @@
  */
 import type { AgentOperation, AgentOpResult } from '@/lib/api'
 
+/** One file as the native scanner reports it. */
+export interface ScannedFile {
+  id?: string
+  name: string
+  extension: string
+  relativePath?: string
+  absolutePath?: string
+  sizeBytes?: number
+  modifiedAt?: number
+}
+
+export interface UserPaths {
+  home: string | null
+  downloads: string | null
+  desktop: string | null
+  documents: string | null
+}
+
 export interface ElectronAPI {
   openDirectoryPicker: () => Promise<string | null>
-  scanDirectory: (dirPath: string) => Promise<{ files: unknown[]; folders: unknown[] }>
+  scanDirectory: (dirPath: string) => Promise<{ files: ScannedFile[]; folders: unknown[] }>
+  /** Real Downloads/Desktop/Documents paths — never guess these from a username. */
+  getUserPaths: () => Promise<UserPaths>
   moveFile: (fromPath: string, toPath: string) => Promise<void>
   renameFolder: (oldAbsPath: string, newAbsPath: string) => Promise<void>
   /** Sends to the OS Recycle Bin — recoverable, not a real delete. */

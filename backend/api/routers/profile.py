@@ -47,7 +47,9 @@ class ChangePasswordRequest(BaseModel):
 
 
 class DeleteAccountRequest(BaseModel):
-    password: str
+    # Optional: Google accounts are created with an empty password_hash, so
+    # requiring one made it impossible for them to delete their account.
+    password: Optional[str] = None
 
 
 # Avatars are stored inline as data: URLs. The client downscales to 256x256
@@ -229,11 +231,57 @@ async def delete_account(
     row = await pool.fetchrow("SELECT password_hash FROM users WHERE id = $1", user_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    if not _pwd_ctx.verify(body.password, row["password_hash"]):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Password is incorrect",
-        )
-    await pool.execute("DELETE FROM users WHERE id = $1", user_id)
+
+    # Google accounts have no password (password_hash is ""), so there is
+    # nothing to verify — the valid session is the proof of identity. Accounts
+    # that DO have a password must still confirm with it.
+    stored = row["password_hash"] or ""
+    if stored:
+        if not body.password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Enter your password to confirm",
+            )
+        try:
+            valid = _pwd_ctx.verify(body.password, stored)
+        except Exception:
+            valid = False
+        if not valid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Password is incorrect",
+            )
+    # Two tables use ON DELETE SET NULL so the operational record survives. That
+    # detaches the row from the user but leaves the personal content sitting in
+    # it — agent_decisions holds filenames in its input and reasoning, and
+    # support_tickets holds the raw email address. Scrub those fields first, or
+    # "we remove your data" is not true.
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute(
+                """
+                UPDATE agent_decisions
+                SET input_json   = NULL,
+                    reasoning    = '[removed when the account was deleted]',
+                    action_taken = '[removed when the account was deleted]'
+                WHERE user_id = $1
+                """,
+                user_id,
+            )
+            await conn.execute(
+                """
+                UPDATE support_tickets
+                SET email    = NULL,
+                    subject  = '[removed when the account was deleted]',
+                    message  = '[removed when the account was deleted]',
+                    ai_reply = NULL
+                WHERE user_id = $1
+                """,
+                user_id,
+            )
+            # Everything else declares ON DELETE CASCADE, so this clears the
+            # cache, journal, rules, corrections and payment records with it.
+            await conn.execute("DELETE FROM users WHERE id = $1", user_id)
+
     logger.info("Account deleted: %s", user_id)
     return {"ok": True}

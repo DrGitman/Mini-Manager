@@ -90,3 +90,10 @@ backend/api/.mypy_cache/
 backend/api/.pytest_cache/
 backend/api/htmlcov/
 backend/api/.coverage
+
+# Desktop installers — distributed from the website, never committed.
+# These are 200MB+ and would bloat the repo permanently.
+dist-electron/
+*.exe
+*.msi
+*.blockmap

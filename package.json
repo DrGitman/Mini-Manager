@@ -2,6 +2,8 @@
   "name": "mini-manager",
   "version": "0.1.0",
   "private": true,
+  "description": "AI file organizer for Windows — scan any folder, classify every file with AI, and organize with full undo.",
+  "author": "KIAMSO",
   "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
