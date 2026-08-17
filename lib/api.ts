@@ -478,6 +478,8 @@ export interface EftClaim {
   expires_at: string
   bank_details: EftBankDetails
   instructions: string
+  /** Empty when no fallback email is configured — the UI hides the option. */
+  proof_email: string
 }
 
 export interface EftProofResult {

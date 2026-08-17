@@ -176,8 +176,13 @@ def evaluate(extracted: dict[str, Any], claim: dict[str, Any]) -> Decision:
     elif amount < expected_amount:
         fails.append(f"amount {amount} is below the expected {expected_amount}")
 
+    # Banks print the symbol rather than the ISO code, so accept both forms of
+    # whichever currency the receiving account actually holds.
+    _SYMBOLS = {"NAD": {"N$"}, "ZAR": {"R", "RAND"}, "USD": {"$"}}
+    want_currency = claim["currency"].upper()
+    accepted = {want_currency} | _SYMBOLS.get(want_currency, set())
     currency = extracted.get("currency")
-    if currency and currency.upper() not in (claim["currency"].upper(), "N$", "NAD"):
+    if currency and currency.strip().upper() not in accepted:
         fails.append(f"currency {currency} is not {claim['currency']}")
 
     if claim["status"] not in ("awaiting_proof", "needs_review"):

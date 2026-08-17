@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { apiGetProfile } from '@/lib/api'
 import { useSession, updateUser } from '@/lib/session'
+import { SUPPORT_EMAIL } from '@/lib/contact'
 
 // ---------------------------------------------------------------------------
 // Data
@@ -43,7 +44,7 @@ const PRO_FEATURES = [
 
 const BUSINESS_FEATURES = [
   'Everything in Pro, plus:',
-  'Renewal dates → calendar',
+  'Renewal dates â†’ calendar',
   'Client folder templates',
   'Exportable audit trail',
   'Shareable rule packs',
@@ -60,7 +61,7 @@ const TESTIMONIALS = [
   {
     id: 't2',
     quote: 'The undo feature alone is worth it. I accidentally moved a whole project folder and got it back in one click.',
-    author: 'Jürgen M.',
+    author: 'JÃ¼rgen M.',
     location: 'Berlin',
   },
   {
@@ -96,7 +97,7 @@ export default function UpgradePage() {
   const [loading] = useState(false)
   const [error] = useState<string | null>(null)
 
-  // Live session — the app shell keeps this in sync with GET /profile.
+  // Live session â€” the app shell keeps this in sync with GET /profile.
   const session = useSession()
   const currentPlan = session?.plan ?? 'free'
 
@@ -124,7 +125,7 @@ export default function UpgradePage() {
             return
           }
         } catch {
-          // keep polling — a transient failure shouldn't end activation
+          // keep polling â€” a transient failure shouldn't end activation
         }
         await new Promise(r => setTimeout(r, 3000))
       }
@@ -145,7 +146,7 @@ export default function UpgradePage() {
   const bizLabel = annual ? `$${bizPrice}/seat/month billed annually` : `$${bizPrice}/seat/month`
 
   function handleUpgradePro() {
-    // Full-page branded checkout — Paddle's inline iframe renders inside it.
+    // Full-page branded checkout â€” Paddle's inline iframe renders inside it.
     router.push('/checkout?plan=pro')
   }
 
@@ -157,7 +158,7 @@ export default function UpgradePage() {
         <p className="text-muted-foreground mt-2">Unlock unlimited AI organization.</p>
       </div>
 
-      {/* Confirmed by the server — currentPlan comes from GET /profile. */}
+      {/* Confirmed by the server â€” currentPlan comes from GET /profile. */}
       {success && (
         <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-green-800 text-sm font-medium">
           <Check className="h-4 w-4 shrink-0" />
@@ -170,7 +171,7 @@ export default function UpgradePage() {
       {!success && activation === 'pending' && (
         <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-blue-900 text-sm font-medium">
           <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-          Payment received — activating your plan. This usually takes a few seconds.
+          Payment received â€” activating your plan. This usually takes a few seconds.
         </div>
       )}
 
@@ -179,8 +180,8 @@ export default function UpgradePage() {
           <p className="font-medium">Your payment went through, but the plan hasn&apos;t activated yet.</p>
           <p className="mt-1">
             This clears itself once our billing webhook is processed. If it hasn&apos;t updated in a
-            few minutes, contact <span className="font-medium">support@minimanager.app</span> and
-            we&apos;ll sort it out — you will not be charged twice.
+            few minutes, contact <span className="font-medium">{SUPPORT_EMAIL}</span> and
+            we&apos;ll sort it out â€” you will not be charged twice.
           </p>
         </div>
       )}
@@ -228,7 +229,7 @@ export default function UpgradePage() {
           </CardContent>
         </Card>
 
-        {/* Pro — elevated */}
+        {/* Pro â€” elevated */}
         <Card className="bg-card border-2 border-primary rounded-lg shadow-md">
           <CardHeader className="pb-4 pt-5">
             <div className="flex justify-center -mt-5 mb-3">
@@ -261,7 +262,7 @@ export default function UpgradePage() {
                 ) : (
                   <Sparkles className="h-4 w-4 mr-1.5" />
                 )}
-                {loading ? 'Opening checkout…' : 'Upgrade to Pro'}
+                {loading ? 'Opening checkoutâ€¦' : 'Upgrade to Pro'}
               </Button>
             )}
           </CardContent>
@@ -322,3 +323,4 @@ export default function UpgradePage() {
     </div>
   )
 }
+

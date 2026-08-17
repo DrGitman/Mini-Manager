@@ -1,5 +1,5 @@
-"""
-EFT payments — AI-verified bank transfers for Namibian customers.
+﻿"""
+EFT payments â€” AI-verified bank transfers for Namibian customers.
 
 Flow:
   1. User claims a plan  -> reference MM-0042 + bank details
@@ -22,7 +22,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from pydantic import BaseModel
 
 from ..config import settings
@@ -44,8 +44,23 @@ _PLAN_AMOUNTS = {
     "business": settings.eft_amount_business,
 }
 
+# Each proof upload costs a Gemini call, so cap it per user rather than per IP â€”
+# an IP limit is trivially sidestepped and would not protect the bill.
+_MAX_PROOFS_PER_HOUR = 5
+# Claims expose banking details, so cap how fast one account can mint them.
+_MAX_CLAIMS_PER_HOUR = 10
 
-# ─── Schemas ──────────────────────────────────────────────────────────────────
+
+def _no_store(response: Response) -> None:
+    """
+    Bank details must not be cached by browsers, proxies or a CDN.
+    Cheap to set, and the alternative is account numbers sitting in caches.
+    """
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+    response.headers["Pragma"] = "no-cache"
+
+
+# â”€â”€â”€ Schemas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class ClaimRequest(BaseModel):
     plan: str = "pro"
@@ -67,6 +82,9 @@ class ClaimResponse(BaseModel):
     expires_at: datetime
     bank_details: BankDetails
     instructions: str
+    # Optional fallback for customers who would rather email their proof.
+    # Empty string means the UI hides that option.
+    proof_email: str = ""
 
 
 class ProofResponse(BaseModel):
@@ -144,14 +162,17 @@ async def _log_decision(
     )
 
 
-# ─── POST /payments/eft/claim ─────────────────────────────────────────────────
+# â”€â”€â”€ POST /payments/eft/claim â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @router.post("/payments/eft/claim", response_model=ClaimResponse)
 async def create_claim(
     body: ClaimRequest,
+    response: Response,
     user: dict = Depends(get_current_user),
 ) -> ClaimResponse:
     """Reserve a reference and show the customer where to send the money."""
+    _no_store(response)
+
     if body.plan not in _PLAN_AMOUNTS:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown plan")
     if not settings.eft_account_number:
@@ -163,7 +184,18 @@ async def create_claim(
     pool = get_pool()
     user_id = user["sub"]
 
-    # Reuse an open claim rather than minting a new reference each visit —
+    # Stop one account minting claims in bulk to harvest the banking details.
+    recent_claims = await pool.fetchval(
+        "SELECT COUNT(*) FROM payment_claims WHERE user_id = $1 AND created_at > NOW() - INTERVAL '1 hour'",
+        user_id,
+    )
+    if recent_claims and recent_claims >= _MAX_CLAIMS_PER_HOUR:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Too many payment requests. Please try again later.",
+        )
+
+    # Reuse an open claim rather than minting a new reference each visit â€”
     # otherwise a customer who reloads the page pays against a stale reference.
     existing = await pool.fetchrow(
         """
@@ -185,6 +217,7 @@ async def create_claim(
             expires_at=existing["expires_at"],
             bank_details=_bank_details(existing["reference"]),
             instructions=_INSTRUCTIONS,
+            proof_email=settings.eft_proof_email,
         )
 
     seq = await pool.fetchval("SELECT nextval('payment_reference_seq')")
@@ -195,10 +228,11 @@ async def create_claim(
         """
         INSERT INTO payment_claims
             (reference, user_id, plan, expected_amount, currency, expires_at)
-        VALUES ($1, $2, $3, $4, 'NAD', $5)
+        VALUES ($1, $2, $3, $4, $6, $5)
         RETURNING reference, expected_amount, currency, status, expires_at
         """,
         reference, user_id, body.plan, _PLAN_AMOUNTS[body.plan], expires_at,
+        settings.eft_currency,
     )
     logger.info("EFT claim %s created for user %s (%s)", reference, user_id, body.plan)
 
@@ -210,10 +244,11 @@ async def create_claim(
         expires_at=row["expires_at"],
         bank_details=_bank_details(row["reference"]),
         instructions=_INSTRUCTIONS,
+        proof_email=settings.eft_proof_email,
     )
 
 
-# ─── POST /payments/eft/proof ─────────────────────────────────────────────────
+# â”€â”€â”€ POST /payments/eft/proof â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @router.post("/payments/eft/proof", response_model=ProofResponse)
 async def upload_proof(
@@ -238,6 +273,23 @@ async def upload_proof(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown payment reference")
     if str(claim["user_id"]) != user_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "This reference is not yours")
+
+    # Cap uploads per user per hour. Each one is a paid Gemini call, so this is
+    # a cost control as much as an abuse control. Enforced in the database so it
+    # survives restarts and cannot be dodged by changing IP.
+    recent_proofs = await pool.fetchval(
+        """
+        SELECT COUNT(*) FROM payment_proofs p
+        JOIN payment_claims c ON c.id = p.claim_id
+        WHERE c.user_id = $1 AND p.created_at > NOW() - INTERVAL '1 hour'
+        """,
+        user_id,
+    )
+    if recent_proofs and recent_proofs >= _MAX_PROOFS_PER_HOUR:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Too many upload attempts. Please try again in an hour, or contact support.",
+        )
 
     data = await file.read()
     if not data:
@@ -277,7 +329,7 @@ async def upload_proof(
         )
         action = f"Activated {claim['plan']} for user {claim['user_id']}"
         message = (
-            f"Payment verified — your {claim['plan'].title()} plan is active. "
+            f"Payment verified â€” your {claim['plan'].title()} plan is active. "
             "We'll confirm it against our bank statement shortly."
         )
     elif decision.action == "review":
@@ -287,7 +339,7 @@ async def upload_proof(
         )
         action = "Queued for human review"
         message = (
-            "Thanks — we've received your proof. Something needs a quick human check, "
+            "Thanks â€” we've received your proof. Something needs a quick human check, "
             "so your plan will activate shortly."
         )
     else:
@@ -322,7 +374,7 @@ async def upload_proof(
     )
 
     logger.info(
-        "Payment agent: %s for %s (confidence %.2f) — %s",
+        "Payment agent: %s for %s (confidence %.2f) â€” %s",
         decision.action, claim["reference"],
         float(extracted.get("confidence") or 0.0), decision.explain(),
     )
@@ -337,13 +389,15 @@ async def upload_proof(
     )
 
 
-# ─── GET /payments/eft/claim/{reference} ──────────────────────────────────────
+# â”€â”€â”€ GET /payments/eft/claim/{reference} â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @router.get("/payments/eft/claim/{reference}", response_model=ClaimResponse)
 async def get_claim(
     reference: str,
+    response: Response,
     user: dict = Depends(get_current_user),
 ) -> ClaimResponse:
+    _no_store(response)
     pool = get_pool()
     row = await pool.fetchrow(
         """
@@ -365,10 +419,11 @@ async def get_claim(
         expires_at=row["expires_at"],
         bank_details=_bank_details(row["reference"]),
         instructions=_INSTRUCTIONS,
+        proof_email=settings.eft_proof_email,
     )
 
 
-# ─── Admin reconciliation ─────────────────────────────────────────────────────
+# â”€â”€â”€ Admin reconciliation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 #
 # Gated on the owner's email rather than a role column, to keep this small.
 # Set EFT_ADMIN_EMAIL to your account.
@@ -445,7 +500,7 @@ async def confirm_payment(claim_id: str, user: dict = Depends(get_current_user))
 
 @router.post("/admin/payments/{claim_id}/reject")
 async def reject_payment(claim_id: str, user: dict = Depends(get_current_user)) -> dict:
-    """Money never landed — revoke access and downgrade."""
+    """Money never landed â€” revoke access and downgrade."""
     _require_admin(user)
     pool = get_pool()
     row = await pool.fetchrow(
@@ -455,5 +510,6 @@ async def reject_payment(claim_id: str, user: dict = Depends(get_current_user)) 
     if not row:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown claim")
     await pool.execute("UPDATE users SET plan = 'free' WHERE id = $1", row["user_id"])
-    logger.info("Payment %s rejected by %s — user downgraded", row["reference"], user.get("email"))
+    logger.info("Payment %s rejected by %s â€” user downgraded", row["reference"], user.get("email"))
     return {"ok": True, "status": "rejected"}
+

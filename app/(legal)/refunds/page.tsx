@@ -1,5 +1,7 @@
+﻿import { SUPPORT_EMAIL } from '@/lib/contact'
+
 export const metadata = {
-  title: 'Refund Policy — Mini Manager',
+  title: 'Refund Policy â€” Mini Manager',
 }
 
 export default function RefundsPage() {
@@ -30,7 +32,7 @@ export default function RefundsPage() {
       <Section title="2. Renewals">
         <p>
           Subscriptions renew automatically until cancelled. The 14-day window applies to each
-          individual charge, including renewals — so if a renewal charge catches you by surprise,
+          individual charge, including renewals â€” so if a renewal charge catches you by surprise,
           you can request a refund for it within 14 days of that charge.
         </p>
         <p>
@@ -50,7 +52,7 @@ export default function RefundsPage() {
 
       <Section title="4. How to Request a Refund">
         <p>
-          Email <strong>support@minimanager.app</strong> from the address on your account, including
+          Email <strong>{SUPPORT_EMAIL}</strong> from the address on your account, including
           the date of the charge. We aim to respond within two business days.
         </p>
         <p>
@@ -62,7 +64,7 @@ export default function RefundsPage() {
       <Section title="5. How Refunds Are Issued">
         <p>
           Approved refunds are returned to the original payment method. Paddle typically processes
-          them within 3–5 business days, though your bank may take up to 10 business days to show
+          them within 3â€“5 business days, though your bank may take up to 10 business days to show
           the credit. Once a refund is issued, access to paid features ends and your account returns
           to the Free plan.
         </p>
@@ -86,7 +88,7 @@ export default function RefundsPage() {
 
       <Section title="8. Contact">
         <p>
-          Questions about this policy: <strong>support@minimanager.app</strong>.
+          Questions about this policy: <strong>{SUPPORT_EMAIL}</strong>.
         </p>
       </Section>
     </article>
@@ -101,3 +103,4 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     </section>
   )
 }
+

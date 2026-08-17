@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useRef, useEffect } from 'react'
 import { Send, Bot, User, Loader2, AlertCircle } from 'lucide-react'
@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { apiSupportChat, type SupportResponse } from '@/lib/api'
+import { SUPPORT_EMAIL } from '@/lib/contact'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -47,7 +48,7 @@ export default function SupportPage() {
     } catch {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again or email support@minimanager.app.',
+        content: 'Sorry, I encountered an error. Please try again or email {SUPPORT_EMAIL}.',
         meta: { escalated: true },
       }])
     }
@@ -60,7 +61,7 @@ export default function SupportPage() {
       {/* Header */}
       <div className="mb-4">
         <h1 className="text-2xl font-semibold text-foreground">Support</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">AI-powered support — escalates to a human only when needed</p>
+        <p className="text-sm text-muted-foreground mt-0.5">AI-powered support â€” escalates to a human only when needed</p>
       </div>
 
       {/* Chat window */}
@@ -122,7 +123,7 @@ export default function SupportPage() {
       {/* Input */}
       <div className="flex gap-2">
         <Input
-          placeholder="Describe your issue…"
+          placeholder="Describe your issueâ€¦"
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
@@ -137,3 +138,4 @@ export default function SupportPage() {
     </div>
   )
 }
+

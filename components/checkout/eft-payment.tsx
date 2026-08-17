@@ -161,7 +161,9 @@ export default function EftPayment({ plan = 'pro' }: { plan?: string }) {
         <Row label="Account name" value={b.account_name} />
         <Row label="Bank" value={b.bank} />
         <Row label="Account number" value={b.account_number} copyable />
-        <Row label="Branch code" value={b.branch_code} />
+        {/* Most app-based payers pick the bank from a list and never type this,
+            so show it only when it's configured rather than an empty row. */}
+        {b.branch_code && <Row label="Branch code" value={b.branch_code} copyable />}
       </div>
 
       <div className="flex gap-2.5 rounded-xl p-4" style={{ backgroundColor: THEME.accentSoft }}>
@@ -200,6 +202,22 @@ export default function EftPayment({ plan = 'pro' }: { plan?: string }) {
 
         {uploadError && (
           <p className="mt-2 text-sm text-red-600">{uploadError}</p>
+        )}
+
+        {claim.proof_email && (
+          <p className="mt-3 text-center text-[13px]" style={{ color: THEME.muted }}>
+            Can&apos;t upload? Email it to{' '}
+            <a
+              href={`mailto:${claim.proof_email}?subject=${encodeURIComponent(
+                `Proof of payment — ${claim.reference}`,
+              )}`}
+              className="font-medium underline underline-offset-2"
+              style={{ color: THEME.accent }}
+            >
+              {claim.proof_email}
+            </a>{' '}
+            with <span className="font-medium">{claim.reference}</span> in the subject.
+          </p>
         )}
       </div>
     </div>

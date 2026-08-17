@@ -64,6 +64,10 @@ services:
         sync: false
       - key: EFT_ADMIN_EMAIL
         sync: false
+      # NAD for FNB Namibia, ZAR for FNB South Africa. Must match what the
+      # receiving account actually holds or every proof fails validation.
+      - key: EFT_CURRENCY
+        sync: false
 
   # ── Frontend (Next.js) ─────────────────────────────────────────────────────
   - type: web

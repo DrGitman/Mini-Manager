@@ -1,5 +1,7 @@
+﻿import { SUPPORT_EMAIL } from '@/lib/contact'
+
 export const metadata = {
-  title: 'Terms of Service — Mini Manager',
+  title: 'Terms of Service â€” Mini Manager',
 }
 
 export default function TermsPage() {
@@ -40,7 +42,7 @@ export default function TermsPage() {
           To access certain features, you must create an account. You agree to provide accurate, current, and
           complete information during registration and to keep your account credentials confidential. You are
           solely responsible for all activity that occurs under your account. Notify us immediately at
-          support@minimanager.app if you suspect unauthorized access.
+          {SUPPORT_EMAIL} if you suspect unauthorized access.
         </p>
         <p className="mt-3">
           We reserve the right to suspend or terminate accounts that violate these Terms, remain inactive for
@@ -68,7 +70,7 @@ export default function TermsPage() {
           applied more than five AI-assisted organization batches. After this period, or if the usage threshold
           has been exceeded, refunds are issued at our sole discretion. Annual subscriptions are not refundable
           after the 14-day window except where required by applicable law. To request a refund, contact
-          billing@minimanager.app.
+          {SUPPORT_EMAIL}.
         </p>
       </Section>
 
@@ -185,8 +187,8 @@ export default function TermsPage() {
       <Section title="16. Contact">
         <p>
           For questions about these Terms, contact us at{' '}
-          <a href="mailto:legal@minimanager.app" className="text-primary hover:underline">
-            legal@minimanager.app
+          <a href="mailto:{SUPPORT_EMAIL}" className="text-primary hover:underline">
+            {SUPPORT_EMAIL}
           </a>{' '}
           or write to: Mini Manager Inc., 123 Market Street, Suite 400, Wilmington, DE 19801.
         </p>
@@ -203,3 +205,4 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     </section>
   )
 }
+

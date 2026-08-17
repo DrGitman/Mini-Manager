@@ -1,5 +1,7 @@
+﻿import { SUPPORT_EMAIL } from '@/lib/contact'
+
 export const metadata = {
-  title: 'Privacy Policy — Mini Manager',
+  title: 'Privacy Policy â€” Mini Manager',
 }
 
 export default function PrivacyPage() {
@@ -170,8 +172,8 @@ export default function PrivacyPage() {
         </ul>
         <p className="mt-3">
           To exercise these rights, contact us at{' '}
-          <a href="mailto:privacy@minimanager.app" className="text-primary hover:underline">
-            privacy@minimanager.app
+          <a href="mailto:{SUPPORT_EMAIL}" className="text-primary hover:underline">
+            {SUPPORT_EMAIL}
           </a>
           . We will respond within 30 days. We may ask you to verify your identity before processing your
           request.
@@ -193,8 +195,8 @@ export default function PrivacyPage() {
           encryption at rest for data stored in Firestore, access controls limiting employee access to
           production data, and regular security reviews. No method of transmission or storage is 100% secure.
           If you discover a vulnerability, please report it responsibly to{' '}
-          <a href="mailto:security@minimanager.app" className="text-primary hover:underline">
-            security@minimanager.app
+          <a href="mailto:{SUPPORT_EMAIL}" className="text-primary hover:underline">
+            {SUPPORT_EMAIL}
           </a>
           .
         </p>
@@ -205,7 +207,7 @@ export default function PrivacyPage() {
           The Service is not directed to children under 13. We do not knowingly collect personal information
           from children under 13. If we become aware that we have collected such information, we will delete
           it promptly. If you believe we may have collected information from a child under 13, please contact
-          us at privacy@minimanager.app.
+          us at {SUPPORT_EMAIL}.
         </p>
       </Section>
 
@@ -239,8 +241,8 @@ export default function PrivacyPage() {
           <p>123 Market Street, Suite 400</p>
           <p>Wilmington, DE 19801</p>
           <p>
-            <a href="mailto:privacy@minimanager.app" className="text-primary hover:underline">
-              privacy@minimanager.app
+            <a href="mailto:{SUPPORT_EMAIL}" className="text-primary hover:underline">
+              {SUPPORT_EMAIL}
             </a>
           </p>
         </address>
@@ -257,3 +259,4 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     </section>
   )
 }
+
