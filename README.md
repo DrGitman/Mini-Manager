@@ -32,8 +32,8 @@ so you can always get them back.
 | | Free | Pro | Business |
 |---|---|---|---|
 | Price | $0 | $19/month | $49/seat/month |
-| Folder scans | 500 files/month | Unlimited | Unlimited |
-| AI sorting | 200/month | Unlimited | Unlimited |
+| Folder scans | 250 files/month | Unlimited | Unlimited |
+| AI sorting | 100/month | Unlimited | Unlimited |
 | Document explanations | 3/month | 50/month | 50/month |
 | Naming rules | 1 | Unlimited | Unlimited |
 | Undo and Archive | Unlimited | Unlimited | Unlimited |
@@ -57,10 +57,13 @@ The project has three parts in one folder:
 
 - **Frontend** — Next.js 16, TypeScript, Tailwind CSS v4, shadcn/ui components
 - **Backend** — Python 3.13, FastAPI, PostgreSQL (hosted on Neon)
-- **AI** — Groq does the fast file sorting, Google Gemini handles explanations and chat
+- **AI** — Groq handles file sorting, the chat assistant, conventions and onboarding.
+  Google Gemini handles document explanations, plain-English rule compiling, and
+  reading proof-of-payment documents.
 - **Login** — email and password, with Google sign-in as an option. Sessions use JWT.
-- **Payments** — Paddle
+- **Payments** — Paddle for cards, plus AI-verified bank transfer (EFT) for Namibia
 - **Desktop** — Electron
+- **Hosting** — backend on Render, marketing site on Netlify, database on Neon
 
 ---
 
@@ -127,6 +130,21 @@ Create a file at `backend/api/.env` with these:
 | `PADDLE_WEBHOOK_SECRET` | Confirms payment messages really came from Paddle | Only if you're taking payments |
 | `PADDLE_PRICE_ID_PRO` | The Pro plan's ID in Paddle | Only if you're taking payments |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google sign-in | Only if you want Google login |
+| `GEMINI_MODEL` | Which Gemini model to use. Defaults to `gemini-flash-lite-latest` | No |
+| `EXTRA_CORS_ORIGINS` | Extra sites allowed to call the API, comma-separated | No |
+
+And these if you want bank-transfer payments. They're your real banking
+details, so they belong in the environment, never in the repo:
+
+| Name | What it's for |
+|---|---|
+| `EFT_ACCOUNT_NAME` | Name on the account, shown to customers |
+| `EFT_BANK_NAME` | Bank name, shown to customers |
+| `EFT_ACCOUNT_NUMBER` | Account number. Without it, the payment page returns 503 |
+| `EFT_BRANCH_CODE` | Branch code. Optional — hidden if not set |
+| `EFT_CURRENCY` | `NAD` for FNB Namibia, `ZAR` for South Africa |
+| `EFT_ADMIN_EMAIL` | Who can reconcile payments. Must match your login email |
+| `EFT_PROOF_EMAIL` | Optional address for customers who'd rather email their proof |
 
 And a file at `mini-manager-app/.env.local` for the frontend:
 
@@ -168,6 +186,35 @@ Without this, payments go through but nobody's plan ever gets upgraded.
 
 ---
 
+## Bank transfer payments (Namibia)
+
+Namibian customers pay by instant bank transfer, and no bank offers an API that
+tells a server "money arrived". So an AI agent closes the loop instead.
+
+How it works:
+
+1. The customer picks a plan and gets a reference like `MM-0042`, plus your bank details
+2. They pay from their banking app using that reference
+3. They upload the bank's confirmation — a PDF or screenshot
+4. **Gemini reads the document** and extracts the amount, reference, date and bank
+5. **Plain Python decides**, not the AI — it checks the reference matches, the amount
+   is enough, the date is sensible, and the document isn't flagged as altered
+6. All checks pass → the plan activates immediately, marked unreconciled
+7. You check your bank statement and confirm on `/payments`
+
+The AI only ever reports what it sees. It never decides to grant access — that
+way a forged document can't argue its own case.
+
+**Be honest about the risk:** proof of payment can be faked. This works because
+the amounts are small, access is revocable, and you reconcile daily. Don't reuse
+this pattern for large invoices or anything you can't take back.
+
+The same document can never be submitted twice, uploads are capped at five per
+user per hour (each one costs a Gemini call), and bank details are only shown to
+a signed-in customer who has started a payment.
+
+---
+
 ## Pages in the app
 
 | Page | What it's for |
@@ -182,7 +229,8 @@ Without this, payments go through but nobody's plan ever gets upgraded.
 | `/settings` | Preferences, blocked folders, naming rules |
 | `/profile` | Your name, photo, password, account |
 | `/upgrade` | Plans and pricing |
-| `/checkout` | Payment page |
+| `/checkout` | Payment page — bank transfer or card |
+| `/payments` | Owner only — reconcile EFT payments the AI verified |
 
 ---
 
@@ -212,22 +260,69 @@ and included next time, so the same mistake doesn't repeat.
 - **Use pnpm, not npm.** npm crashes on this project's file layout.
 - **Start the backend from `mini-manager-app`**, not from inside `backend/api`,
   or its imports won't resolve.
-- **The Groq model is set in one place** — `groq_model` in `backend/api/config.py`,
-  or the `GROQ_MODEL` environment variable. Don't hardcode model names anywhere else.
+- **Model names live in one place** — `groq_model` and `gemini_model` in
+  `backend/api/config.py`. Don't hardcode them anywhere else. Both providers
+  retire models with about a week's notice, and a pinned name buried in a router
+  is how that becomes an outage. Prefer a `-latest` alias for Gemini.
 - **Payments are only real once the webhook arrives.** The browser saying
   "payment complete" doesn't mean the plan is active — the server has to hear
   from Paddle first.
+- **Paddle's notification ID and its signing secret look alike.** Only the
+  `pdl_ntfset_…` secret verifies a signature. Using the ID gives 401 on every
+  webhook, and Paddle's delivery log is the fastest way to spot it.
 - **Database changes** go in `backend/api/migrations/` as numbered `.sql` files.
   They run automatically when the server starts.
+- **Don't edit files with PowerShell's `Set-Content`.** On Windows PowerShell it
+  reads as ANSI and writes UTF-8 with a BOM, which mangles dashes and quotes and
+  can push `'use client'` off the first line.
+- **Python is pinned to 3.13** in `.python-version`. On 3.14 `pydantic-core` has
+  no wheel and tries to build from Rust, which fails.
+
+---
+
+## Deploying
+
+The backend runs on Render. `render.yaml` sets the build and start commands and
+lists every environment variable, so **New → Blueprint** creates it in one step.
+Leave Root Directory blank — this repo's root already is `mini-manager-app`.
+
+Once deployed, point Paddle at:
+
+```
+https://<your-service>.onrender.com/api/v1/webhooks/paddle
+```
+
+subscribed to `subscription.activated`, `subscription.updated`,
+`subscription.canceled` and `transaction.completed`. That replaces the ngrok
+tunnel described above, which is only needed for local development.
+
+Then build the desktop app against the hosted backend:
+
+```powershell
+$env:NEXT_PUBLIC_API_URL = "https://<your-service>.onrender.com"
+$env:API_URL = "https://<your-service>.onrender.com"
+pnpm electron:build
+```
+
+Both variables matter. Without them the installed app calls `localhost:8000` on
+the user's machine and silently does nothing.
+
+Render's free tier sleeps after about 15 minutes idle, and the next request
+takes 50 seconds or so while it wakes. Warm it before a demo.
 
 ---
 
 ## Still to do
 
-- [ ] Host the app and server somewhere public
-- [ ] Make the webhook check refuse messages when the secret is missing, instead of letting them through
-- [ ] Sign the Windows app so it doesn't trigger a security warning
+- [ ] Make the chat agent reliably execute commands (it chats correctly, but a
+      command like "organise my Documents by type" doesn't always produce a task)
+- [ ] Stop the same folder being recorded as several duplicate scans
+- [ ] Let document explain read images and longer PDFs — it's capped at 2000
+      characters of text today, though Gemini itself supports both
+- [ ] Dedupe API calls on page load (preferences is fetched four times)
+- [ ] Sign the Windows app so it doesn't trigger a SmartScreen warning
 - [ ] Longer logins that survive more than two hours away
+- [ ] Email notifications — nothing is emailed today, in or out
 - [ ] Scheduled scans that run on their own
 - [ ] Cloud folder support (Google Drive, OneDrive)
 

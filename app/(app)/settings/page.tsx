@@ -551,7 +551,7 @@ export default function SettingsPage() {
               <p className="text-xs text-muted-foreground">
                 {plan === 'pro'
                   ? 'Unlimited files, unlimited AI classifications'
-                  : '500 files/month, 200 AI classifications'}
+                  : '250 files/month, 100 AI classifications'}
               </p>
             </div>
           </div>

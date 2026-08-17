@@ -22,8 +22,8 @@ import { SUPPORT_EMAIL } from '@/lib/contact'
 // ---------------------------------------------------------------------------
 
 const FREE_FEATURES = [
-  '500 files/month scan',
-  '200 AI classifications/month',
+  '250 files/month scan',
+  '100 AI classifications/month',
   '3 document explanations/month',
   '1 naming convention preset',
   'Unlimited undo & archive',

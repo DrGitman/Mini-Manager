@@ -1051,7 +1051,7 @@ function Roadmap() {
 const faqs = [
   {
     q: "Is Mini Manager free?",
-    a: "There's a free plan that covers 500 file scans and 200 AI classifications per month, with unlimited undo and archive. If you need more, Pro lifts the scan and classification limits, and Business adds per-seat access for teams. The source is on GitHub either way.",
+    a: "There's a free plan that covers 250 file scans and 100 AI classifications per month, with unlimited undo and archive. If you need more, Pro lifts the scan and classification limits, and Business adds per-seat access for teams. The source is on GitHub either way.",
   },
   {
     q: "Does it work offline?",

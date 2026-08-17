@@ -32,9 +32,88 @@ _MAX_FILES_PER_FOLDER = 200
 class _PayloadTooLarge(Exception):
     """Groq refused the request as too large — retry with less context."""
 
+
+# Strict schema. gpt-oss-120b supports constrained decoding, so the shape is
+# guaranteed rather than merely requested — no more empty replies or a missing
+# task on a clear command.
+#
+# `intent` is the important field: forcing the model to say which of chat /
+# question / command it is, before producing anything, makes the distinction
+# explicit instead of something we infer from whether `task` happens to be set.
+_OPERATION_TYPES = [
+    "move_files", "move_folder", "move_file", "copy_files",
+    # "delete" = recoverable. Moves to the Archive.
+    "delete_folder_recursive", "delete_file",
+    # "permanently delete" = gone for good. Only ever emitted when the user
+    # explicitly says permanently/forever/for good — kept as separate operation
+    # types so an ordinary "delete these" can never reach them.
+    "permanently_delete_file", "permanently_delete_folder",
+    "create_folder", "rename", "organize_by_type",
+]
+
+# Operations that destroy data irreversibly.
+_IRREVERSIBLE = {"permanently_delete_file", "permanently_delete_folder"}
+
+# Strict mode requires every property to be listed in `required`, so optional
+# operation fields are declared nullable rather than omitted.
+_AGENT_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "intent": {
+            "type": "string",
+            "enum": ["chat", "question", "command"],
+            "description": (
+                "chat = greeting/thanks/small talk. "
+                "question = asking about their files. "
+                "command = telling you to change files or folders."
+            ),
+        },
+        "reply": {"type": "string"},
+        "needs_clarification": {"type": "boolean"},
+        "questions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "question": {"type": "string"},
+                    "options": {"type": "array", "items": {"type": "string"}},
+                    "type": {"type": "string"},
+                },
+                "required": ["question", "options", "type"],
+                "additionalProperties": False,
+            },
+        },
+        "task": {
+            "type": ["object", "null"],
+            "properties": {
+                "description": {"type": "string"},
+                "operations": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "type": {"type": "string", "enum": _OPERATION_TYPES},
+                            "source": {"type": ["string", "null"]},
+                            "destination": {"type": ["string", "null"]},
+                            "path": {"type": ["string", "null"]},
+                            "new_name": {"type": ["string", "null"]},
+                        },
+                        "required": ["type", "source", "destination", "path", "new_name"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "required": ["description", "operations"],
+            "additionalProperties": False,
+        },
+    },
+    "required": ["intent", "reply", "needs_clarification", "questions", "task"],
+    "additionalProperties": False,
+}
+
 # ─── Prompts ──────────────────────────────────────────────────────────────────
 
-_GEMINI_SYSTEM = r"""You are Mini Manager, an AI file management assistant that ACTUALLY EXECUTES operations on the user's local file system.
+_AGENT_SYSTEM = r"""You are Mini Manager, an AI file management assistant that ACTUALLY EXECUTES operations on the user's local file system.
 
 When the user gives you a file/folder command, you output a JSON response with typed operations that the backend will execute immediately and for real.
 
@@ -47,10 +126,19 @@ OPERATION TYPES (use exact paths the user gave — never invent paths):
   → moves a single file
 - {"type": "copy_files", "source": "C:\\path\\from", "destination": "C:\\path\\to"}
   → copies every file from source into destination
-- {"type": "delete_folder_recursive", "path": "C:\\path\\folder"}
-  → deletes folder and ALL its contents (use when user says "delete folder")
 - {"type": "delete_file", "path": "C:\\path\\file.txt"}
-  → deletes a single file
+  → moves ONE file to the Archive. Recoverable. Use for any ordinary
+    "delete", "remove", "get rid of", "bin it", "clear out".
+- {"type": "delete_folder_recursive", "path": "C:\\path\\folder"}
+  → moves a folder and its contents to the Archive. Recoverable.
+
+- {"type": "permanently_delete_file", "path": "C:\\path\\file.txt"}
+- {"type": "permanently_delete_folder", "path": "C:\\path\\folder"}
+  → GONE FOREVER. No undo, no Archive, no recovery.
+    ONLY use these when the user explicitly says "permanently", "forever",
+    "for good", "completely", "wipe", or "don't archive it".
+    "delete this" on its own NEVER means permanent — use delete_file.
+    If in doubt, use the recoverable version and say so in your reply.
 - {"type": "create_folder", "path": "C:\\path\\new_folder"}
   → creates a new folder (including parents)
 - {"type": "rename", "path": "C:\\path\\old_name", "new_name": "new_name"}
@@ -104,14 +192,35 @@ When no action needed (e.g. answering a question about files):
   "task": null
 }
 
+FIRST, CLASSIFY THE USER'S MESSAGE — set "intent" to exactly one of:
+
+  "chat"     — greeting, thanks, goodbye, small talk, or asking what you can do.
+               → short friendly reply, "task": null
+  "question" — asking ABOUT their files ("which are school files?", "how many
+               PDFs?", "what's in Downloads?").
+               → answer from FILE CONTEXT, "task": null. Answering is not acting.
+  "command"  — telling you to CHANGE something: organise, sort, move, copy,
+               delete, rename, create, clean up, group, archive.
+               → "task" MUST contain the operations. Never null for a command.
+
+Set "intent" before deciding anything else. If intent is "command" you must
+produce a task; if it is "chat" or "question" you must not.
+
 CONVERSATION RULES (check these FIRST, before anything else):
 - If the user is greeting you ("hi", "hello", "hey"), thanking you, saying goodbye, or making
-  small talk, reply in ONE short friendly sentence and stop. Do NOT list files. Do NOT emit a
-  task. Do NOT mention the FILE CONTEXT. A greeting is not a request to do anything.
-- If the user asks what you can do, describe your abilities briefly. Do not list their files.
-- Only read the FILE CONTEXT when the user actually asks about their files or requests a
-  file operation. Its presence is NOT itself a request — it is background information that is
-  attached to every message whether it is relevant or not.
+  small talk, reply in ONE short friendly sentence with "task": null. Do NOT list files.
+  A greeting is not a request to do anything.
+- If the user asks what you can do, describe your abilities briefly with "task": null.
+- If the user ASKS ABOUT their files ("which are school files?", "how many PDFs?"), answer
+  from FILE CONTEXT with "task": null. Answering is not acting.
+- If the user TELLS YOU TO DO something (organise, sort, move, copy, delete, rename, create,
+  clean up, group, archive), you MUST return a "task" with operations. Replying with
+  "task": null to a command is wrong — the user asked for work and nothing would happen.
+  Example: "organise C:\Users\me\Documents by file type"
+    → task.operations = [{"type": "organize_by_type", "source": "C:\\Users\\me\\Documents"}]
+- The FILE CONTEXT is attached to every message automatically. Its presence is NOT a request.
+
+"reply" must never be empty. Always say something to the user.
 
 FILE CONTEXT RULES:
 - If a FILE CONTEXT block is present, use it to answer questions about what files exist.
@@ -145,6 +254,48 @@ EXT_GROUPS: dict[str, list[str]] = {
     "Executables":[".exe", ".msi", ".dmg", ".pkg", ".deb", ".AppImage"],
 }
 
+# ─── Safety ───────────────────────────────────────────────────────────────────
+
+# Paths the agent must never touch, however confidently it is asked. Matched
+# case-insensitively against the whole path.
+_PROTECTED_FRAGMENTS = (
+    "c:\\windows", "c:\\program files", "c:\\programdata",
+    "\\appdata\\", "\\system32", "\\$recycle.bin",
+    "node_modules", "\\.git\\", "\\venv\\", "\\.venv\\",
+)
+
+
+def _is_protected(path: pathlib.Path) -> bool:
+    p = str(path).lower().replace("/", "\\")
+    if any(frag in p for frag in _PROTECTED_FRAGMENTS):
+        return True
+    # A bare drive root — "organise C:\" would otherwise walk the whole disk.
+    return len(path.parts) <= 1
+
+
+def _quarantine_dir(original: pathlib.Path) -> pathlib.Path:
+    """
+    Where 'deleted' things actually go. Kept beside the original so it stays on
+    the same drive — a cross-drive move is a copy+delete, which is exactly what
+    we're avoiding.
+    """
+    root = original.parent / "_Mini Manager Archive"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _safe_archive(p: pathlib.Path) -> str:
+    """Move to the archive instead of deleting. Never overwrites."""
+    dest_dir = _quarantine_dir(p)
+    dest = dest_dir / p.name
+    n = 1
+    while dest.exists():
+        dest = dest_dir / f"{p.stem} ({n}){p.suffix}"
+        n += 1
+    shutil.move(str(p), str(dest))
+    return str(dest)
+
+
 def _ext_group(ext: str) -> str:
     ext = ext.lower()
     for group, exts in EXT_GROUPS.items():
@@ -170,6 +321,24 @@ def _execute_operations(operations: list[dict]) -> list[dict]:
     for op in operations:
         t = op.get("type", "")
         logger.info("Executing operation: %s", op)
+
+        # Refuse protected paths before doing anything. The model can be talked
+        # into "organise C:\Windows"; this is what stops it mattering.
+        targets = [op.get(k) for k in ("source", "destination", "path") if op.get(k)]
+        blocked = next(
+            (p for p in targets if _is_protected(pathlib.Path(p))), None
+        )
+        if blocked:
+            logger.warning("Refused operation %s on protected path: %s", t, blocked)
+            results.append({
+                "op": t, "status": "refused",
+                "detail": (
+                    f"I won't touch {blocked} — it's a system or development folder. "
+                    "Point me at a personal folder like Downloads or Documents instead."
+                ),
+            })
+            continue
+
         try:
             # ── move_files ────────────────────────────────────────────────────
             if t == "move_files":
@@ -227,24 +396,63 @@ def _execute_operations(operations: list[dict]) -> list[dict]:
                     copied += 1
                 results.append({"op": t, "status": "done", "detail": f"Copied {copied} file(s) to {dst.name}"})
 
-            # ── delete_folder_recursive ───────────────────────────────────────
+            # ── delete_folder_recursive → archive, never delete ───────────────
+            # The product promise is that nothing is ever destroyed. These used
+            # to call shutil.rmtree / unlink, which made "clean up my Downloads"
+            # capable of irreversible data loss.
             elif t == "delete_folder_recursive":
                 p = pathlib.Path(op["path"])
                 if not p.exists():
                     results.append({"op": t, "status": "done", "detail": f"{p.name} already gone"})
                     continue
                 count = sum(1 for _ in p.rglob("*"))
-                shutil.rmtree(str(p))
-                results.append({"op": t, "status": "done", "detail": f"Deleted {p.name} ({count} items)"})
+                dest = _safe_archive(p)
+                results.append({
+                    "op": t, "status": "done",
+                    "detail": f"Moved {p.name} ({count} items) to the Archive — restore it any time",
+                    "archived_to": dest,
+                })
 
-            # ── delete_file ───────────────────────────────────────────────────
+            # ── delete_file → archive, never delete ───────────────────────────
             elif t == "delete_file":
                 p = pathlib.Path(op["path"])
                 if not p.exists():
                     results.append({"op": t, "status": "done", "detail": f"{p.name} already gone"})
                     continue
+                dest = _safe_archive(p)
+                results.append({
+                    "op": t, "status": "done",
+                    "detail": f"Moved {p.name} to the Archive — restore it any time",
+                    "archived_to": dest,
+                })
+
+            # ── permanently_delete_file → really gone ─────────────────────────
+            # Only reached when the user explicitly asked for permanent removal.
+            elif t == "permanently_delete_file":
+                p = pathlib.Path(op["path"])
+                if not p.exists():
+                    results.append({"op": t, "status": "done", "detail": f"{p.name} already gone"})
+                    continue
                 p.unlink()
-                results.append({"op": t, "status": "done", "detail": f"Deleted {p.name}"})
+                logger.warning("PERMANENTLY deleted file: %s", p)
+                results.append({
+                    "op": t, "status": "done",
+                    "detail": f"Permanently deleted {p.name}. This cannot be undone.",
+                })
+
+            # ── permanently_delete_folder → really gone ───────────────────────
+            elif t == "permanently_delete_folder":
+                p = pathlib.Path(op["path"])
+                if not p.exists():
+                    results.append({"op": t, "status": "done", "detail": f"{p.name} already gone"})
+                    continue
+                count = sum(1 for _ in p.rglob("*"))
+                shutil.rmtree(str(p))
+                logger.warning("PERMANENTLY deleted folder: %s (%d items)", p, count)
+                results.append({
+                    "op": t, "status": "done",
+                    "detail": f"Permanently deleted {p.name} ({count} items). This cannot be undone.",
+                })
 
             # ── create_folder ─────────────────────────────────────────────────
             elif t == "create_folder":
@@ -294,12 +502,29 @@ def _execute_operations(operations: list[dict]) -> list[dict]:
 
 # ─── LLM helpers ──────────────────────────────────────────────────────────────
 
-async def _call_groq(messages: list[dict], temperature: float = 0.2) -> dict:
+async def _call_groq(
+    messages: list[dict],
+    temperature: float = 0.2,
+    schema: Optional[dict] = None,
+) -> dict:
+    """
+    Call Groq. When `schema` is given, use constrained decoding so the reply is
+    guaranteed to match it — that is what makes the chat/command distinction
+    reliable instead of dependent on how the prompt is worded.
+    """
+    if schema is not None:
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {"name": "agent_response", "strict": True, "schema": schema},
+        }
+    else:
+        response_format = {"type": "json_object"}
+
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(
             _GROQ_URL,
             headers={"Authorization": f"Bearer {settings.groq_api_key}", "Content-Type": "application/json"},
-            json={"model": _GROQ_MODEL, "messages": messages, "temperature": temperature, "response_format": {"type": "json_object"}},
+            json={"model": _GROQ_MODEL, "messages": messages, "temperature": temperature, "response_format": response_format},
         )
 
         # Distinct type so the caller can retry with a smaller context instead
@@ -349,6 +574,63 @@ class AgentResponse(BaseModel):
     steps: list[AgentStep] = []
 
 
+# ─── File context ─────────────────────────────────────────────────────────────
+
+def _build_file_context(file_listing: list[dict], budget: int) -> str:
+    """
+    Render the file listing within a character budget.
+
+    A per-folder cap alone isn't enough — many folders, or long Windows paths,
+    still produce a request Groq refuses. Budgeting the whole block keeps the
+    request inside the limit whatever the folder looks like.
+    """
+    if budget <= 0 or not file_listing:
+        total = sum(len(f.get("files", [])) for f in file_listing)
+        return (
+            f"FILE CONTEXT: the user has {total} files in scope, too many to list here. "
+            "Answer general questions normally. If they ask about specific files, ask "
+            "them which folder to look in."
+        )
+
+    lines = [
+        "FILE CONTEXT (real files from the user's scan scope folders):",
+        "Use this to answer questions about files, filter by topic, or build operations.",
+        "Format: filename | extension | size | full_path",
+    ]
+    remaining = budget
+    omitted = 0
+
+    for folder_entry in file_listing:
+        folder_name = folder_entry.get("folder", "Unknown")
+        files = folder_entry.get("files", [])
+        header = f"\n📁 {folder_name} — {len(files)} files:"
+        if remaining - len(header) <= 0:
+            omitted += len(files)
+            continue
+        lines.append(header)
+        remaining -= len(header)
+
+        shown = 0
+        for f in files[:_MAX_FILES_PER_FOLDER]:
+            size_str = f"{f.get('size_kb', 0):.0f}KB"
+            line = f"  {f['name']} | {f.get('ext', '')} | {size_str} | {f.get('path', f['name'])}"
+            if remaining - len(line) <= 0:
+                break
+            lines.append(line)
+            remaining -= len(line)
+            shown += 1
+
+        omitted += len(files) - shown
+
+    if omitted:
+        lines.append(f"\n  ... {omitted} more files not listed (context limit reached)")
+        lines.append(
+            "  If the user asks about files beyond this list, ask them which folder to "
+            "look in rather than guessing."
+        )
+    return "\n".join(lines)
+
+
 # ─── Route ────────────────────────────────────────────────────────────────────
 
 @router.post("/agent", response_model=AgentResponse)
@@ -364,81 +646,86 @@ async def agent_chat(
         context_parts.append(f"Current folder: {body.folder_context}")
 
     if body.file_listing:
-        lines = [
-            "FILE CONTEXT (real files from the user's scan scope folders):",
-            "Use this to answer questions about files, filter by topic, or build operations.",
-            "Format: filename | extension | size | full_path",
-        ]
-        # A per-folder cap alone is not enough: many folders, or long paths, still
-        # produce a request Groq rejects with 413. Budget the whole block by
-        # characters and stop cleanly when it is spent.
-        budget = _MAX_CONTEXT_CHARS
-        omitted = 0
-        truncated = False
+        pass  # file context is built per-attempt below, so it can shrink on retry
 
-        for folder_entry in body.file_listing:
-            folder_name = folder_entry.get("folder", "Unknown")
-            files = folder_entry.get("files", [])
-            header = f"\n📁 {folder_name} — {len(files)} files:"
-            if budget - len(header) <= 0:
-                truncated = True
-                omitted += len(files)
-                continue
-            lines.append(header)
-            budget -= len(header)
+    def build_messages(budget: int) -> list[dict]:
+        """
+        Keep the file listing OUT of the user's own message. Gluing it on made a
+        bare "Hello" arrive as hundreds of lines of filenames followed by one
+        word, and the model answered the listing instead of the greeting.
+        """
+        parts = list(context_parts)
+        if body.file_listing:
+            parts.append(_build_file_context(body.file_listing, budget))
 
-            shown = 0
-            for f in files[:_MAX_FILES_PER_FOLDER]:
-                size_str = f"{f.get('size_kb', 0):.0f}KB"
-                ext = f.get("ext", "")
-                path = f.get("path", f["name"])
-                line = f"  {f['name']} | {ext} | {size_str} | {path}"
-                if budget - len(line) <= 0:
-                    truncated = True
-                    break
-                lines.append(line)
-                budget -= len(line)
-                shown += 1
-
-            if shown < len(files):
-                omitted += len(files) - shown
-
-        if omitted:
-            lines.append(
-                f"\n  ... {omitted} more files not listed"
-                + (" (context limit reached)" if truncated else "")
-            )
-            lines.append(
-                "  If the user needs those files, ask them to narrow the request to a "
-                "specific folder rather than guessing."
-            )
-        context_parts.append("\n".join(lines))
-
-    # Keep the file listing OUT of the user's own message. Gluing it on made a
-    # bare "Hello" arrive as hundreds of lines of filenames followed by one word,
-    # and the model answered the file listing instead of the greeting.
-    llm_messages: list[dict] = [{"role": "system", "content": _GEMINI_SYSTEM}]
-    if context_parts:
-        llm_messages.append({
-            "role": "system",
-            "content": (
-                "Background information about the user's files. This is attached to every "
-                "message automatically — it is not a request. Only use it if the user's "
-                "actual message asks about files.\n\n" + "\n\n".join(context_parts)
-            ),
-        })
-    llm_messages.extend(messages)
+        msgs: list[dict] = [{"role": "system", "content": _AGENT_SYSTEM}]
+        if parts:
+            msgs.append({
+                "role": "system",
+                "content": (
+                    "Background information about the user's files. This is attached to "
+                    "every message automatically — it is not a request. Only use it if "
+                    "the user's actual message asks about files.\n\n" + "\n\n".join(parts)
+                ),
+            })
+        msgs.extend(messages)
+        return msgs
 
     steps: list[AgentStep] = []
 
     # ── Phase 1: Groq understands + emits typed operations ────────────────────
-    groq_data = await _call_groq(llm_messages)
+    # Retry with progressively less file detail rather than failing the user.
+    # The last budget is 0, which always fits — so this cannot end in an error
+    # just because someone has a large Downloads folder.
+    groq_data = None
+    for attempt, budget in enumerate(_CONTEXT_BUDGETS):
+        try:
+            groq_data = await _call_groq(build_messages(budget), schema=_AGENT_RESPONSE_SCHEMA)
+            break
+        except _PayloadTooLarge:
+            logger.warning(
+                "Groq 413 with context budget %d; retrying smaller (attempt %d)",
+                budget, attempt + 1,
+            )
+    if groq_data is None:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "The AI service could not process that request. Please try again.",
+        )
 
     reply = groq_data.get("reply", "")
     needs_clarification = bool(groq_data.get("needs_clarification", False))
     raw_questions = groq_data.get("questions", [])
     task = groq_data.get("task")
-    logger.info("Groq reply: %s", reply)
+    intent = groq_data.get("intent", "?")
+    logger.info("AGENT_INTENT=%s task_present=%s reply=%s", intent, task is not None, reply[:80])
+
+    # The schema guarantees the shape, not the semantics: it still permits
+    # intent="command" with task=null. Catch that contradiction and retry once
+    # with an explicit correction rather than silently doing nothing.
+    if intent == "command" and task is None:
+        logger.warning("Agent said 'command' but emitted no task — retrying with correction")
+        retry_messages = build_messages(_CONTEXT_BUDGETS[0]) + [
+            {"role": "assistant", "content": json.dumps(groq_data)},
+            {
+                "role": "user",
+                "content": (
+                    "You classified that as a command but returned no task. "
+                    "Return the same JSON again with task.operations filled in "
+                    "using the exact paths from my message."
+                ),
+            },
+        ]
+        try:
+            retried = await _call_groq(retry_messages, schema=_AGENT_RESPONSE_SCHEMA)
+            if retried.get("task"):
+                groq_data = retried
+                task = retried["task"]
+                reply = retried.get("reply", reply)
+                logger.info("Retry produced a task: %s", json.dumps(task)[:200])
+        except Exception as exc:
+            logger.warning("Command retry failed: %s", exc)
+
     logger.info("Groq task: %s", json.dumps(task))
 
     # Coerce questions
