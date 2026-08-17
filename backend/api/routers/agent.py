@@ -556,6 +556,10 @@ class AgentRequest(BaseModel):
     messages: list[AgentMessage]
     folder_context: Optional[str] = None
     file_listing: Optional[list[dict]] = None  # [{folder, files: [{name, ext, size_kb, path}]}]
+    # The desktop app sets this. The user's files live on their machine, so a
+    # hosted backend cannot act on them — it plans, and the client executes.
+    # Defaults to False so a locally-run backend keeps working as before.
+    client_execution: bool = False
 
 class AgentStep(BaseModel):
     label: str
@@ -572,6 +576,9 @@ class AgentResponse(BaseModel):
     needs_clarification: bool = False
     questions: list[AgentQuestion] = []
     steps: list[AgentStep] = []
+    # Populated only when client_execution is set: the plan for the desktop app
+    # to run locally. Empty when the backend executed the operations itself.
+    operations: list[dict] = []
 
 
 # ─── File context ─────────────────────────────────────────────────────────────
@@ -741,9 +748,28 @@ async def agent_chat(
             questions.append(AgentQuestion(question=q, options=[], type="single_select"))
 
     # ── Phase 2: Execute operations ───────────────────────────────────────────
+    planned_operations: list[dict] = []
+
     if task and not needs_clarification:
         operations: list[dict] = task.get("operations", [])
         logger.info("Operations to execute: %s", json.dumps(operations))
+
+        # The desktop app runs these itself. The user's files are on their
+        # machine, so a hosted backend has nothing to act on — it plans, the
+        # client executes, and the files never leave the device.
+        if operations and body.client_execution:
+            planned_operations = operations
+            logger.info("Returning %d operation(s) for the client to run", len(operations))
+            steps = [
+                AgentStep(label=task.get("description", "Applying changes"), status="pending")
+            ]
+            return AgentResponse(
+                reply=reply,
+                needs_clarification=False,
+                questions=questions,
+                steps=steps,
+                operations=planned_operations,
+            )
 
         if operations:
             exec_results = _execute_operations(operations)

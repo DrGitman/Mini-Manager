@@ -40,6 +40,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   trashFile: (filePath) =>
     ipcRenderer.invoke('trash-file', filePath),
 
+  /**
+   * Execute AI-planned file operations on THIS machine.
+   *
+   * The agent plans on the server but the files are local, so execution has to
+   * happen here — a hosted backend cannot see C:\Users\... at all.
+   * Returns [{ op, status: 'done' | 'refused' | 'failed', detail }].
+   */
+  runOperations: (operations) =>
+    ipcRenderer.invoke('run-operations', operations),
+
   /** Current OS platform: 'win32' | 'darwin' | 'linux' */
   platform: process.platform,
 

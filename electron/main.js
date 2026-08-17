@@ -262,6 +262,166 @@ ipcMain.handle('trash-file', async (_, filePath) => {
   await shell.trashItem(filePath)
 })
 
+// ─── IPC: Agent operations, executed on THIS machine ─────────────────────────
+//
+// The AI plans on the server, but the files live here. Running these in the
+// backend only ever worked while it was on localhost — a hosted backend cannot
+// see C:\Users\... at all.
+//
+// "delete" = Recycle Bin, which IS the quarantine: Windows already knows how to
+// restore from it. "permanently delete" removes it outright, so it is not in the
+// bin either.
+
+const PROTECTED_FRAGMENTS = [
+  'c:\\windows', 'c:\\program files', 'c:\\programdata',
+  '\\appdata\\', '\\system32', '\\$recycle.bin',
+  'node_modules', '\\.git\\', '\\venv\\', '\\.venv\\',
+]
+
+function isProtected(p) {
+  const lower = String(p).toLowerCase().replace(/\//g, '\\')
+  if (PROTECTED_FRAGMENTS.some(frag => lower.includes(frag))) return true
+  // A bare drive root — "organise C:\" would otherwise walk the whole disk.
+  return lower.replace(/\\+$/, '').length <= 2
+}
+
+const EXT_GROUPS = {
+  Images:   ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.heic', '.tiff'],
+  Videos:   ['.mp4', '.mov', '.avi', '.mkv', '.wmv', '.webm', '.m4v'],
+  Audio:    ['.mp3', '.wav', '.aac', '.flac', '.ogg', '.m4a'],
+  Documents:['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.rtf', '.odt'],
+  Code:     ['.py', '.js', '.ts', '.tsx', '.jsx', '.html', '.css', '.json', '.yml', '.sh', '.java', '.go', '.rs'],
+  Archives: ['.zip', '.rar', '.7z', '.tar', '.gz'],
+}
+
+function extGroup(ext) {
+  const e = ext.toLowerCase()
+  for (const [group, exts] of Object.entries(EXT_GROUPS)) {
+    if (exts.includes(e)) return group
+  }
+  return 'Other'
+}
+
+function moveOne(from, to) {
+  fs.mkdirSync(path.dirname(to), { recursive: true })
+  // Never overwrite: append " (1)", " (2)" the way Windows does.
+  let dest = to
+  let n = 1
+  while (fs.existsSync(dest)) {
+    const ext = path.extname(to)
+    dest = path.join(path.dirname(to), `${path.basename(to, ext)} (${n})${ext}`)
+    n += 1
+  }
+  try {
+    fs.renameSync(from, dest)
+  } catch (err) {
+    if (err.code === 'EXDEV') {
+      fs.copyFileSync(from, dest)
+      fs.unlinkSync(from)
+    } else throw err
+  }
+  return dest
+}
+
+ipcMain.handle('run-operations', async (_, operations) => {
+  const results = []
+
+  for (const op of operations || []) {
+    const t = op.type
+    const targets = ['source', 'destination', 'path'].map(k => op[k]).filter(Boolean)
+    const blocked = targets.find(isProtected)
+
+    if (blocked) {
+      results.push({
+        op: t, status: 'refused',
+        detail: `I won't touch ${blocked} — it's a system or development folder.`,
+      })
+      continue
+    }
+
+    try {
+      if (t === 'delete_file') {
+        // Recycle Bin = recoverable. This is the quarantine.
+        await shell.trashItem(op.path)
+        results.push({ op: t, status: 'done', detail: `${path.basename(op.path)} moved to the Recycle Bin` })
+
+      } else if (t === 'delete_folder_recursive') {
+        await shell.trashItem(op.path)
+        results.push({ op: t, status: 'done', detail: `${path.basename(op.path)} moved to the Recycle Bin` })
+
+      } else if (t === 'permanently_delete_file') {
+        // Gone for good — not in the bin either.
+        fs.unlinkSync(op.path)
+        results.push({ op: t, status: 'done', detail: `Permanently deleted ${path.basename(op.path)}. This cannot be undone.` })
+
+      } else if (t === 'permanently_delete_folder') {
+        fs.rmSync(op.path, { recursive: true, force: true })
+        results.push({ op: t, status: 'done', detail: `Permanently deleted ${path.basename(op.path)}. This cannot be undone.` })
+
+      } else if (t === 'move_file') {
+        const dest = moveOne(op.source, op.destination)
+        results.push({ op: t, status: 'done', detail: `Moved to ${path.basename(dest)}` })
+
+      } else if (t === 'move_files') {
+        let moved = 0
+        for (const name of fs.readdirSync(op.source)) {
+          const from = path.join(op.source, name)
+          if (fs.statSync(from).isFile()) {
+            moveOne(from, path.join(op.destination, name))
+            moved += 1
+          }
+        }
+        results.push({ op: t, status: 'done', detail: `Moved ${moved} file(s)` })
+
+      } else if (t === 'copy_files') {
+        let copied = 0
+        fs.mkdirSync(op.destination, { recursive: true })
+        for (const name of fs.readdirSync(op.source)) {
+          const from = path.join(op.source, name)
+          if (fs.statSync(from).isFile()) {
+            fs.copyFileSync(from, path.join(op.destination, name))
+            copied += 1
+          }
+        }
+        results.push({ op: t, status: 'done', detail: `Copied ${copied} file(s)` })
+
+      } else if (t === 'move_folder') {
+        const dest = path.join(op.destination, path.basename(op.source))
+        fs.mkdirSync(op.destination, { recursive: true })
+        fs.renameSync(op.source, dest)
+        results.push({ op: t, status: 'done', detail: `Moved ${path.basename(op.source)}` })
+
+      } else if (t === 'create_folder') {
+        fs.mkdirSync(op.path, { recursive: true })
+        results.push({ op: t, status: 'done', detail: `Created ${path.basename(op.path)}` })
+
+      } else if (t === 'rename') {
+        const dest = path.join(path.dirname(op.path), op.new_name)
+        fs.renameSync(op.path, dest)
+        results.push({ op: t, status: 'done', detail: `Renamed to ${op.new_name}` })
+
+      } else if (t === 'organize_by_type') {
+        let moved = 0
+        for (const name of fs.readdirSync(op.source)) {
+          const from = path.join(op.source, name)
+          if (!fs.statSync(from).isFile()) continue
+          const group = extGroup(path.extname(name))
+          moveOne(from, path.join(op.source, group, name))
+          moved += 1
+        }
+        results.push({ op: t, status: 'done', detail: `Sorted ${moved} file(s) into folders by type` })
+
+      } else {
+        results.push({ op: t, status: 'failed', detail: `Unknown operation: ${t}` })
+      }
+    } catch (err) {
+      results.push({ op: t, status: 'failed', detail: String(err.message || err) })
+    }
+  }
+
+  return results
+})
+
 // ─── IPC: Google OAuth ────────────────────────────────────────────────────────
 
 ipcMain.handle('google-auth-start', async () => {

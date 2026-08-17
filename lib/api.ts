@@ -237,15 +237,83 @@ export interface AgentQuestion {
   type: 'single_select' | 'multi_select'
 }
 
+export interface AgentOperation {
+  type: string
+  source?: string | null
+  destination?: string | null
+  path?: string | null
+  new_name?: string | null
+}
+
+export interface AgentOpResult {
+  op: string
+  status: 'done' | 'refused' | 'failed'
+  detail: string
+}
+
+/** True when running inside the packaged desktop app. */
+function hasElectron(): boolean {
+  return typeof window !== 'undefined' && Boolean(window.electronAPI?.runOperations)
+}
+
+/**
+ * Ask the agent. In the desktop app the server only *plans* — the operations
+ * come back and run locally, because the user's files are on their machine and
+ * a hosted backend cannot reach them.
+ */
 export async function apiAgent(
   messages: { role: string; content: string }[],
   folderContext?: string,
   fileListing?: { folder: string; files: { name: string; ext: string; size_kb: number; path: string }[] }[],
-): Promise<{ reply: string; steps?: AgentStep[]; needs_clarification?: boolean; questions?: AgentQuestion[] }> {
-  return request('/api/v1/agent', {
+): Promise<{
+  reply: string
+  steps?: AgentStep[]
+  needs_clarification?: boolean
+  questions?: AgentQuestion[]
+  operations?: AgentOperation[]
+}> {
+  const clientExecution = hasElectron()
+
+  const res = await request<{
+    reply: string
+    steps?: AgentStep[]
+    needs_clarification?: boolean
+    questions?: AgentQuestion[]
+    operations?: AgentOperation[]
+  }>('/api/v1/agent', {
     method: 'POST',
-    body: JSON.stringify({ messages, folder_context: folderContext ?? null, file_listing: fileListing ?? null }),
+    body: JSON.stringify({
+      messages,
+      folder_context: folderContext ?? null,
+      file_listing: fileListing ?? null,
+      client_execution: clientExecution,
+    }),
   })
+
+  // Run the plan on this machine and fold the outcome back into the steps, so
+  // the panel reports what actually happened rather than what was intended.
+  if (clientExecution && res.operations?.length) {
+    try {
+      const results = await window.electronAPI!.runOperations(res.operations)
+      return {
+        ...res,
+        steps: results.map(r => ({
+          label: r.detail,
+          status: r.status === 'done' ? 'done' : 'failed',
+        })) as AgentStep[],
+      }
+    } catch (err) {
+      return {
+        ...res,
+        steps: [{
+          label: err instanceof Error ? err.message : 'Could not apply the changes',
+          status: 'failed',
+        }] as AgentStep[],
+      }
+    }
+  }
+
+  return res
 }
 
 // ─── Notifications ────────────────────────────────────────────────────────────
