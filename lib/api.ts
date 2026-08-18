@@ -257,6 +257,10 @@ export interface AgentOpResult {
   op: string
   status: 'done' | 'refused' | 'failed'
   detail: string
+  /** Present on operations that moved something — used to write the journal. */
+  file_name?: string
+  from?: string
+  to?: string
 }
 
 /** True when running inside the packaged desktop app. */
@@ -288,6 +292,8 @@ export async function apiAgent(
    * folder" renders as a finished task that never happened.
    */
   executed?: boolean
+  /** Operations awaiting the user's confirmation. Nothing has run yet. */
+  pendingOperations?: AgentOperation[]
 }> {
   const clientExecution = hasElectron()
 
@@ -309,66 +315,67 @@ export async function apiAgent(
     }),
   })
 
-  // Operations that change or remove files must not run without the user
-  // agreeing first. There is no confirmation step in the chat panel yet, so
-  // these are shown as a plan instead of being executed.
-  const NEEDS_CONFIRMATION = new Set([
-    'move_files', 'move_folder', 'move_file',
-    'delete_file', 'delete_folder_recursive',
-    'permanently_delete_file', 'permanently_delete_folder',
-    'rename', 'organize_by_type',
-  ])
-
+  // Operations that change files are never run off the model's say-so. They
+  // come back to the panel, which shows exactly what will happen and waits for
+  // the user to press Apply — see runAgentOperations below.
+  //
+  // Previously this branch replaced the reply with "I've prepared these changes
+  // but haven't applied them, use the Organize page", and there was no way to
+  // apply them anywhere. The assistant could not do anything it was asked.
   if (clientExecution && res.operations?.length) {
-    const risky = res.operations.filter(o => NEEDS_CONFIRMATION.has(o.type))
-    if (risky.length) {
-      return {
-        ...res,
-        reply:
-          `${res.reply}\n\nI've prepared these changes but haven't applied them. ` +
-          `Use the Organize page to review and apply file changes — it shows you ` +
-          `every move before anything happens.`,
-        // 'pending', and executed stays false — nothing has happened yet.
-        executed: false,
-        steps: risky.map(o => ({
-          label: `Planned: ${o.type.replace(/_/g, ' ')} ${o.path ?? o.source ?? ''}`.trim(),
-          status: 'pending',
-        })) as AgentStep[],
-      }
-    }
-  }
-
-  // Run the plan on this machine and fold the outcome back into the steps, so
-  // the panel reports what actually happened rather than what was intended.
-  if (clientExecution && res.operations?.length) {
-    try {
-      const results = await window.electronAPI!.runOperations(res.operations)
-      return {
-        ...res,
-        // A real handler returned real results — this is the only place
-        // executed becomes true.
-        executed: results.length > 0,
-        steps: results.map(r => ({
-          label: r.detail,
-          status: r.status === 'done' ? 'done' : 'failed',
-        })) as AgentStep[],
-      }
-    } catch (err) {
-      console.error('[agent] operations failed', err)
-      return {
-        ...res,
-        executed: false,
-        steps: [{
-          label: err instanceof Error ? err.message : 'Could not apply the changes',
-          status: 'failed',
-        }] as AgentStep[],
-      }
-    }
+    return { ...res, executed: false, pendingOperations: res.operations }
   }
 
   // No operations came back, so nothing ran. Any steps here are the model
   // describing intent, and the panel renders them as narration only.
   return { ...res, executed: false }
+}
+
+/**
+ * Run operations the user has confirmed, then record them.
+ *
+ * Recording is what makes the History and Archive pages real: they read the
+ * journal, so work done from the chat panel was invisible there until now —
+ * archived files in particular never showed up at all.
+ */
+export async function runAgentOperations(
+  operations: AgentOperation[],
+  label = 'Assistant',
+): Promise<AgentOpResult[]> {
+  if (!hasElectron()) {
+    return operations.map(o => ({
+      op: o.type, status: 'failed' as const,
+      detail: 'File changes need the desktop app.',
+    }))
+  }
+
+  const results = await window.electronAPI!.runOperations(operations)
+
+  // Journal whatever actually succeeded and touched a real path. A failure or
+  // a refusal is not history — it never happened.
+  const done = results.filter(r => r.status === 'done' && r.from && r.file_name)
+  if (done.length) {
+    try {
+      await request('/api/v1/batches', {
+        method: 'POST',
+        body: JSON.stringify({
+          label,
+          folder_path: '',
+          ops: done.map(r => ({
+            file_name: r.file_name,
+            from_location: r.from,
+            to_location: r.to ?? '',
+            op_type: r.op,
+          })),
+        }),
+      })
+    } catch (err) {
+      // The files did move — losing the journal entry must not read as failure.
+      console.error('[agent] operations ran but could not be recorded', err)
+    }
+  }
+
+  return results
 }
 
 // ─── Notifications ────────────────────────────────────────────────────────────

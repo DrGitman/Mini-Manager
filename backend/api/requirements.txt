@@ -1,7 +1,12 @@
-fastapi==0.115.6
+# Strands pulls in `mcp`, which needs sse-starlette >= 1.6.1 and therefore
+# starlette >= 0.49. FastAPI 0.115 capped starlette below 0.42, so the two
+# could not coexist — the server started raising
+# "Router.__init__() got an unexpected keyword argument 'on_startup'".
+# FastAPI 0.141 accepts starlette 1.x, which resolves it.
+fastapi==0.141.1
 uvicorn[standard]==0.32.1
 asyncpg==0.30.0
-pydantic[email]==2.10.3
+pydantic[email]==2.13.4
 pydantic-settings==2.7.0
 PyJWT==2.10.1
 passlib[bcrypt]==1.7.4
@@ -16,6 +21,14 @@ groq
 python-multipart
 aiofiles
 pyotp==2.10.0
+
+# ─── Strands Agents ───────────────────────────────────────────────────────────
+# The agent framework. GeminiModel works with the google-genai already listed
+# above, so no extra is needed for our primary provider.
+# Add `litellm` only if we pursue Groq as a fallback — Groq is not a native
+# Strands provider and is reached through LiteLLM (model_id "groq/...").
+strands-agents==1.52.0
+strands-agents-tools==0.8.6
 
 # Optional — only needed for Paddle subscription endpoints and
 # scripts/create_paddle_products.py. Imported lazily, so the server

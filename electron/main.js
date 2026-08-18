@@ -486,6 +486,20 @@ function moveOne(from, to) {
   return dest
 }
 
+/**
+ * Where archived files go.
+ *
+ * "Delete" sends things to the Recycle Bin; "archive" is different — the user
+ * wants to keep the file but move it out of the way, and wants to find it
+ * again in the Archive page. A visible folder in their home directory is
+ * somewhere they can also reach it without the app.
+ */
+function archiveRoot() {
+  const root = path.join(app.getPath('home'), 'Mini Manager Archive')
+  fs.mkdirSync(root, { recursive: true })
+  return root
+}
+
 ipcMain.handle('run-operations', async (_, operations) => {
   const results = []
 
@@ -506,11 +520,13 @@ ipcMain.handle('run-operations', async (_, operations) => {
       if (t === 'delete_file') {
         // Recycle Bin = recoverable. This is the quarantine.
         await shell.trashItem(op.path)
-        results.push({ op: t, status: 'done', detail: `${path.basename(op.path)} moved to the Recycle Bin` })
+        results.push({ op: t, status: 'done', detail: `${path.basename(op.path)} moved to the Recycle Bin`,
+          file_name: path.basename(op.path), from: op.path, to: 'Recycle Bin' })
 
       } else if (t === 'delete_folder_recursive') {
         await shell.trashItem(op.path)
-        results.push({ op: t, status: 'done', detail: `${path.basename(op.path)} moved to the Recycle Bin` })
+        results.push({ op: t, status: 'done', detail: `${path.basename(op.path)} moved to the Recycle Bin`,
+          file_name: path.basename(op.path), from: op.path, to: 'Recycle Bin' })
 
       } else if (t === 'permanently_delete_file') {
         // Gone for good — not in the bin either.
@@ -523,7 +539,8 @@ ipcMain.handle('run-operations', async (_, operations) => {
 
       } else if (t === 'move_file') {
         const dest = moveOne(op.source, op.destination)
-        results.push({ op: t, status: 'done', detail: `Moved to ${path.basename(dest)}` })
+        results.push({ op: t, status: 'done', detail: `Moved to ${path.basename(dest)}`,
+          file_name: path.basename(op.source), from: op.source, to: dest })
 
       } else if (t === 'move_files') {
         let moved = 0
@@ -552,7 +569,8 @@ ipcMain.handle('run-operations', async (_, operations) => {
         const dest = path.join(op.destination, path.basename(op.source))
         fs.mkdirSync(op.destination, { recursive: true })
         fs.renameSync(op.source, dest)
-        results.push({ op: t, status: 'done', detail: `Moved ${path.basename(op.source)}` })
+        results.push({ op: t, status: 'done', detail: `Moved ${path.basename(op.source)}`,
+          file_name: path.basename(op.source), from: op.source, to: dest })
 
       } else if (t === 'create_folder') {
         fs.mkdirSync(op.path, { recursive: true })
@@ -561,7 +579,8 @@ ipcMain.handle('run-operations', async (_, operations) => {
       } else if (t === 'rename') {
         const dest = path.join(path.dirname(op.path), op.new_name)
         fs.renameSync(op.path, dest)
-        results.push({ op: t, status: 'done', detail: `Renamed to ${op.new_name}` })
+        results.push({ op: t, status: 'done', detail: `Renamed to ${op.new_name}`,
+          file_name: path.basename(op.path), from: op.path, to: dest })
 
       } else if (t === 'organize_by_type') {
         let moved = 0
@@ -573,6 +592,17 @@ ipcMain.handle('run-operations', async (_, operations) => {
           moved += 1
         }
         results.push({ op: t, status: 'done', detail: `Sorted ${moved} file(s) into folders by type` })
+
+      } else if (t === 'archive' || t === 'archive_file' || t === 'archive_folder') {
+        // Keep it, but out of the way — and recorded, so the Archive page can
+        // show it and restore it later.
+        const src = op.path || op.source
+        const dest = moveOne(src, path.join(archiveRoot(), path.basename(src)))
+        results.push({
+          op: 'archive', status: 'done',
+          detail: `Archived ${path.basename(src)}`,
+          file_name: path.basename(src), from: src, to: dest,
+        })
 
       } else {
         results.push({ op: t, status: 'failed', detail: `Unknown operation: ${t}` })

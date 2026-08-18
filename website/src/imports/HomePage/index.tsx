@@ -453,10 +453,10 @@ function Downloads() {
       tag: "Windows Installer",
       title: "Setup.exe Direct Download",
       version: "v1.0.0-beta",
-      size: "68.2 MB",
+      size: "184 MB",
       desc: "Get full desktop power for heavy-duty organizing, document scanning, and AI assistance on Windows.",
       cta: "Download Setup.exe",
-      href: "#",
+      href: "https://github.com/DrGitman/Mini-Manager/releases/latest/download/Mini-Manager-Setup.exe",
       primary: true,
     },
     {

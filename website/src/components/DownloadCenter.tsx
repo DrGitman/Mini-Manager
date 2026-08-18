@@ -10,12 +10,14 @@ export default function DownloadCenter() {
       title: "Windows Installer",
       icon: <Monitor className="w-8 h-8 text-[#00E5FF]" />,
       version: "v1.0.0-beta",
-      size: "68.2 MB",
+      size: "184 MB",
       badge: "Setup.exe Direct Download",
       description: "Get full desktop power for heavy-duty organizing, document scanning, schedule planning, and AI assistance on Windows.",
       buttonText: "Download Setup.exe",
       buttonIcon: <Download size={18} />,
-      link: "https://github.com/DrGitman/Mini-Manager/releases",
+      // Points at the newest release asset, so the site never needs
+      // editing when a new version is published.
+      link: "https://github.com/DrGitman/Mini-Manager/releases/latest/download/Mini-Manager-Setup.exe",
       primary: true,
       color: "from-[#00E5FF]/20 to-transparent",
       borderColor: "border-[#00E5FF]/30"

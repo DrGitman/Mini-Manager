@@ -12,7 +12,7 @@ import {
 import { BouncingDots } from '@/components/ui/bouncing-dots'
 import { cn } from '@/lib/utils'
 import { timeAgo } from '@/lib/types'
-import { apiAgent } from '@/lib/api'
+import { apiAgent, runAgentOperations, type AgentOperation } from '@/lib/api'
 import {
   type AgentContext, buildAgentContext, clearDigests, hasDigests,
   refreshFolder, refreshStale, resolveWatchedFolder, warmWatchedFolders,
@@ -96,6 +96,10 @@ interface ChatMessage {
   ts: number
   status?: MsgStatus
   steps?: AgentStep[]
+  /** File changes waiting for the user to approve. Nothing has run yet. */
+  pending?: AgentOperation[]
+  /** Set once the user has answered, so the buttons stop being offered. */
+  decision?: 'applied' | 'cancelled'
 }
 
 interface Session {
@@ -147,7 +151,105 @@ function MessageBody({ text, inBubble = false }: { text: string; inBubble?: bool
   )
 }
 
+
+// ─── Pending-change confirmation ──────────────────────────────────────────────
+
+/** Plain-English description of one planned operation. */
+function describeOp(op: AgentOperation): string {
+  const base = (p?: string | null) => (p ? p.split(/[\/]/).filter(Boolean).pop() ?? p : '')
+  switch (op.type) {
+    case 'move_file':
+    case 'move_files':
+    case 'move_folder':
+      return `Move ${base(op.source)} → ${op.destination ?? ''}`
+    case 'copy_files':
+      return `Copy ${base(op.source)} → ${op.destination ?? ''}`
+    case 'rename':
+      return `Rename ${base(op.path)} → ${op.new_name ?? ''}`
+    case 'create_folder':
+      return `Create folder ${base(op.path)}`
+    case 'organize_by_type':
+      return `Sort ${base(op.source)} into folders by file type`
+    case 'delete_file':
+    case 'delete_folder_recursive':
+      return `Move ${base(op.path)} to the Recycle Bin`
+    case 'permanently_delete_file':
+    case 'permanently_delete_folder':
+      return `Permanently delete ${base(op.path)} — cannot be undone`
+    case 'archive':
+    case 'archive_file':
+    case 'archive_folder':
+      return `Archive ${base(op.path ?? op.source)}`
+    default:
+      return `${op.type.replace(/_/g, ' ')} ${base(op.path ?? op.source)}`.trim()
+  }
+}
+
+const PERMANENT = new Set(['permanently_delete_file', 'permanently_delete_folder'])
+
+/**
+ * Nothing touches the disk until this is answered.
+ *
+ * The assistant used to say it had "prepared" changes and point at the Organize
+ * page, where they were nowhere to be found — so it could never actually do
+ * anything it was asked. Now the plan is shown here and applied on request.
+ */
+function PendingChanges({
+  ops, decision, busy, onApply, onCancel,
+}: {
+  ops: AgentOperation[]
+  decision?: 'applied' | 'cancelled'
+  busy: boolean
+  onApply: () => void
+  onCancel: () => void
+}) {
+  const permanent = ops.some(o => PERMANENT.has(o.type))
+
+  if (decision === 'applied') return null
+  if (decision === 'cancelled') {
+    return <p className="mt-2 text-xs text-muted-foreground">Cancelled — nothing was changed.</p>
+  }
+
+  return (
+    <div className={cn(
+      'mt-3 rounded-lg border p-3',
+      permanent ? 'border-red-200 bg-red-50/60 dark:bg-red-950/20' : 'border-border bg-muted/40',
+    )}>
+      <p className="text-xs font-medium text-foreground">
+        {permanent ? 'This permanently deletes files' : 'Review before I make these changes'}
+      </p>
+      <ul className="mt-2 space-y-1">
+        {ops.map((op, i) => (
+          <li key={i} className="text-xs text-muted-foreground font-mono break-all">
+            • {describeOp(op)}
+          </li>
+        ))}
+      </ul>
+      <div className="mt-3 flex gap-2">
+        <button
+          onClick={onApply}
+          disabled={busy}
+          className={cn(
+            'rounded-md px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-60',
+            permanent ? 'bg-red-600 hover:bg-red-700' : 'bg-primary hover:opacity-90',
+          )}
+        >
+          {busy ? 'Working…' : permanent ? 'Yes, delete permanently' : 'Apply changes'}
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={busy}
+          className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent disabled:opacity-60"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ─── Primitives ───────────────────────────────────────────────────────────────
+
 
 function AgentMark() {
   return (
@@ -509,9 +611,12 @@ function UserMessage({ msg }: { msg: ChatMessage }) {
   )
 }
 
-function AssistantMessage({ msg, onRetry }: {
+function AssistantMessage({ msg, onRetry, onApply, onCancel, applying }: {
   msg: ChatMessage
   onRetry: (id: string) => void
+  onApply: (id: string) => void
+  onCancel: (id: string) => void
+  applying: string | null
 }) {
   const [copied, setCopied] = useState(false)
   const isWorking = msg.status === 'working'
@@ -538,6 +643,15 @@ function AssistantMessage({ msg, onRetry }: {
         )}
         {msg.steps && msg.steps.length > 0 && (
           <StepTracker steps={msg.steps} />
+        )}
+        {msg.pending && msg.pending.length > 0 && (
+          <PendingChanges
+            ops={msg.pending}
+            decision={msg.decision}
+            busy={applying === msg.id}
+            onApply={() => onApply(msg.id)}
+            onCancel={() => onCancel(msg.id)}
+          />
         )}
         {!isWorking && (
           <div className="mt-3 flex items-center gap-0.5">
@@ -687,6 +801,7 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
   const [voiceError, setVoiceError] = useState<string | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [palette, setPalette] = useState<PaletteState | null>(null)
+  const [applying, setApplying] = useState<string | null>(null)
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -861,6 +976,7 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
         id: `ai-${Date.now()}`, role: 'ai', text: res.reply, ts: Date.now(),
         status: res.executed ? 'complete' : undefined,
         steps: res.steps ?? [],
+        pending: res.pendingOperations,
       }])
 
       // If clarification needed, open the docked palette
@@ -911,6 +1027,48 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
     } finally {
       setThinking(false)
     }
+  }
+
+  /**
+   * Run the changes the user just approved, then show what actually happened.
+   * Results come back per operation, so a partial failure is reported honestly
+   * rather than as blanket success.
+   */
+  async function handleApply(msgId: string) {
+    const msg = messages.find(m => m.id === msgId)
+    if (!msg?.pending?.length) return
+    setApplying(msgId)
+    try {
+      const results = await runAgentOperations(msg.pending)
+      const failed = results.filter(r => r.status !== 'done')
+      setMessages(prev => prev.map(m => m.id === msgId
+        ? {
+            ...m,
+            decision: 'applied',
+            status: failed.length === results.length ? 'failed' : 'complete',
+            steps: results.map(r => ({
+              label: r.detail,
+              status: r.status === 'done' ? 'done' : 'failed',
+            })) as AgentStep[],
+          }
+        : m))
+    } catch (err) {
+      setMessages(prev => prev.map(m => m.id === msgId
+        ? {
+            ...m, decision: 'applied', status: 'failed',
+            steps: [{
+              label: err instanceof Error ? err.message : 'Could not apply the changes',
+              status: 'failed',
+            }] as AgentStep[],
+          }
+        : m))
+    } finally {
+      setApplying(null)
+    }
+  }
+
+  function handleCancelPending(msgId: string) {
+    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, decision: 'cancelled' } : m))
   }
 
   function handlePaletteComplete(answers: { question: string; selected: string[] }[]) {
@@ -988,7 +1146,11 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
           {messages.map(msg =>
             msg.role === 'user'
               ? <UserMessage key={msg.id} msg={msg} />
-              : <AssistantMessage key={msg.id} msg={msg} onRetry={handleRetry} />
+              : <AssistantMessage
+                  key={msg.id} msg={msg} onRetry={handleRetry}
+                  onApply={handleApply} onCancel={handleCancelPending}
+                  applying={applying}
+                />
           )}
 
           {thinking && <ThinkingMessage />}

@@ -52,6 +52,10 @@ _OPERATION_TYPES = [
     # types so an ordinary "delete these" can never reach them.
     "permanently_delete_file", "permanently_delete_folder",
     "create_folder", "rename", "organize_by_type",
+    # "archive" = keep it, but move it out of the way into the Archive folder,
+    # where the Archive page lists it and can restore it. Distinct from delete,
+    # which goes to the Recycle Bin.
+    "archive",
 ]
 
 # Operations that destroy data irreversibly.
@@ -130,10 +134,19 @@ OPERATION TYPES (use exact paths the user gave — never invent paths):
 - {"type": "copy_files", "source": "C:\\path\\from", "destination": "C:\\path\\to"}
   → copies every file from source into destination
 - {"type": "delete_file", "path": "C:\\path\\file.txt"}
-  → moves ONE file to the Archive. Recoverable. Use for any ordinary
-    "delete", "remove", "get rid of", "bin it", "clear out".
+  → sends ONE file to the Recycle Bin. Recoverable. Use for any ordinary
+    "delete", "remove", "get rid of", "bin it", "throw away".
 - {"type": "delete_folder_recursive", "path": "C:\\path\\folder"}
-  → moves a folder and its contents to the Archive. Recoverable.
+  → sends a folder and its contents to the Recycle Bin. Recoverable.
+
+- {"type": "archive", "path": "C:\\path\\file-or-folder"}
+  → moves it into the user's Archive folder, where the Archive page lists it
+    and it can be restored. This is NOT deleting — the file is being KEPT,
+    just moved out of the way.
+    Use whenever the user says "archive", "put it away", "store it", "move it
+    out of the way", or "I don't need it now but don't delete it".
+    Deleting and archiving go to different places. NEVER answer "archive this"
+    with a delete operation.
 
 - {"type": "permanently_delete_file", "path": "C:\\path\\file.txt"}
 - {"type": "permanently_delete_folder", "path": "C:\\path\\folder"}
