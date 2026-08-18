@@ -19,8 +19,7 @@ from .middleware.security import SecurityHeadersMiddleware
 from .routers import (
     auth, classify, explain, scans, preferences, agent,
     stats, notifications, rules, profile, insights, search, journal, mfa, privacy,
-    subscriptions, corrections, blocklist, conventions, support_agent, onboarding, business_agents,
-    eft_payments,
+    corrections, blocklist, conventions, support_agent, onboarding, business_agents,
 )
 from .services.db import close_pool, init_pool
 
@@ -148,8 +147,6 @@ app.include_router(search.router,        prefix=_PREFIX)
 app.include_router(journal.router,       prefix=_PREFIX)
 app.include_router(mfa.router,           prefix=_PREFIX)
 app.include_router(privacy.router,       prefix=_PREFIX)
-app.include_router(subscriptions.router, prefix=_PREFIX)
-app.include_router(eft_payments.router,  prefix=_PREFIX)
 app.include_router(corrections.router,     prefix=_PREFIX)
 app.include_router(blocklist.router,       prefix=_PREFIX)
 app.include_router(conventions.router,     prefix=_PREFIX)

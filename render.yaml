@@ -40,34 +40,6 @@ services:
       - key: EXTRA_CORS_ORIGINS    # optional, comma-separated
         sync: false
 
-      # ── Paddle ───────────────────────────────────────────────────────────
-      # Webhook destination once deployed:
-      #   https://<this-service>.onrender.com/api/v1/webhooks/paddle
-      - key: PADDLE_WEBHOOK_SECRET # pdl_ntfset_... — required in production
-        sync: false
-      - key: PADDLE_SANDBOX_API_KEY
-        sync: false
-      - key: PADDLE_PRICE_ID_PRO
-        sync: false
-
-      # ── EFT payments (Namibia) ───────────────────────────────────────────
-      # Real banking details — env only, never the repo. Without
-      # EFT_ACCOUNT_NUMBER the claim endpoint returns 503; without
-      # EFT_ADMIN_EMAIL the reconciliation dashboard is closed to everyone.
-      - key: EFT_ACCOUNT_NAME
-        sync: false
-      - key: EFT_BANK_NAME
-        sync: false
-      - key: EFT_ACCOUNT_NUMBER
-        sync: false
-      - key: EFT_BRANCH_CODE
-        sync: false
-      - key: EFT_ADMIN_EMAIL
-        sync: false
-      # NAD for FNB Namibia, ZAR for FNB South Africa. Must match what the
-      # receiving account actually holds or every proof fails validation.
-      - key: EFT_CURRENCY
-        sync: false
 
   # ── Frontend (Next.js) ─────────────────────────────────────────────────────
   - type: web
@@ -89,11 +61,3 @@ services:
       - key: API_URL
         sync: false
 
-      # NEXT_PUBLIC_* values are baked in at build time, so changing one
-      # requires a redeploy, not just a restart.
-      - key: NEXT_PUBLIC_PADDLE_CLIENT_TOKEN
-        sync: false
-      - key: NEXT_PUBLIC_PADDLE_PRICE_ID_PRO
-        sync: false
-      - key: NEXT_PUBLIC_PADDLE_ENV
-        value: sandbox

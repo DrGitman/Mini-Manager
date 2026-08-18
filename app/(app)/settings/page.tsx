@@ -84,9 +84,6 @@ export default function SettingsPage() {
       .catch(() => {})
   }, [])
 
-  // License key input
-  const [licenseKey, setLicenseKey] = useState('')
-
   // Blocklist state
   const [blocklist, setBlocklist] = useState<BlocklistEntry[]>([])
   const [blocklistInput, setBlocklistInput] = useState('')
@@ -675,55 +672,6 @@ export default function SettingsPage() {
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ── Section 4: License & Subscription ── */}
-      <Card className="bg-card border border-border rounded-lg shadow-sm">
-        <CardHeader className="p-6 pb-0">
-          <div className="flex items-center gap-2">
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-base font-semibold text-foreground">License &amp; Subscription</h2>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6 pt-4 space-y-4">
-          <div className="flex items-center justify-between py-1">
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-foreground">Current plan</p>
-                <Badge variant="secondary">{plan === 'pro' ? 'Pro Plan' : 'Free Plan'}</Badge>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {plan === 'pro'
-                  ? 'Unlimited files, unlimited AI classifications'
-                  : '250 files/month, 100 AI classifications'}
-              </p>
-            </div>
-          </div>
-          <Separator />
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-foreground">License key</Label>
-            <div className="flex gap-2">
-              <Input
-                placeholder="MM-XXXX-XXXX-XXXX"
-                value={licenseKey}
-                onChange={e => setLicenseKey(e.target.value)}
-                className="flex-1 font-mono"
-              />
-              <Button variant="outline" disabled={!licenseKey.trim()}>Activate</Button>
-            </div>
-          </div>
-          <Separator />
-          <div className="flex items-center justify-between py-1">
-            <p className="text-sm text-muted-foreground">
-              {plan === 'pro' ? 'Pro plan active' : 'Free tier, no renewal required'}
-            </p>
-            {plan !== 'pro' && (
-              <a href="/upgrade" className="text-sm text-primary hover:underline font-medium">
-                Upgrade to Pro →
-              </a>
             )}
           </div>
         </CardContent>

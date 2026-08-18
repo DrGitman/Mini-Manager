@@ -128,20 +128,6 @@ async function request<T>(
   return res.json() as Promise<T>
 }
 
-// ─── Subscriptions ────────────────────────────────────────────────────────────
-
-export interface CheckoutResponse {
-  transaction_id: string
-  checkout_url: string
-}
-
-export async function apiCreateCheckout(priceId?: string): Promise<CheckoutResponse> {
-  return request<CheckoutResponse>('/api/v1/subscriptions/checkout', {
-    method: 'POST',
-    body: JSON.stringify({ price_id: priceId ?? null }),
-  })
-}
-
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 export interface AuthResponse {
@@ -596,112 +582,6 @@ export async function apiChangePassword(oldPassword: string, newPassword: string
     method: 'POST',
     body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
   })
-}
-
-// ─── EFT payments (Namibia) ───────────────────────────────────────────────────
-
-export interface EftBankDetails {
-  account_name: string
-  bank: string
-  account_number: string
-  branch_code: string
-  reference: string
-}
-
-export interface EftClaim {
-  reference: string
-  amount: number
-  currency: string
-  status: string
-  expires_at: string
-  bank_details: EftBankDetails
-  instructions: string
-  /** Empty when no fallback email is configured — the UI hides the option. */
-  proof_email: string
-}
-
-export interface EftProofResult {
-  decision: 'activate' | 'review' | 'reject'
-  status: string
-  message: string
-  reasoning: string
-  confidence: number | null
-  extracted: Record<string, unknown> | null
-}
-
-export interface EftAdminClaim {
-  id: string
-  reference: string
-  email: string
-  plan: string
-  expected_amount: number
-  currency: string
-  status: string
-  created_at: string
-  activated_at: string | null
-  reconciled_at: string | null
-  confidence: number | null
-  reasoning: string | null
-  extracted: Record<string, unknown> | null
-}
-
-/** Reserve a reference and get the bank details to pay into. */
-export async function apiCreateEftClaim(plan = 'pro'): Promise<EftClaim> {
-  return request<EftClaim>('/api/v1/payments/eft/claim', {
-    method: 'POST',
-    body: JSON.stringify({ plan }),
-  })
-}
-
-export async function apiGetEftClaim(reference: string): Promise<EftClaim> {
-  return request<EftClaim>(`/api/v1/payments/eft/claim/${encodeURIComponent(reference)}`)
-}
-
-/**
- * Upload proof of payment. Deliberately does not go through `request()` —
- * that sets Content-Type: application/json, which would stop the browser
- * generating the multipart boundary and the upload would fail.
- */
-export async function apiUploadEftProof(
-  reference: string,
-  file: File,
-): Promise<EftProofResult> {
-  const token = getToken()
-  const form = new FormData()
-  form.append('file', file)
-
-  const res = await fetch(
-    `${BASE}/api/v1/payments/eft/proof?reference=${encodeURIComponent(reference)}`,
-    {
-      method: 'POST',
-      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: form,
-    },
-  )
-  if (!res.ok) {
-    const raw = await res.text().catch(() => '')
-    let msg = `Upload failed (${res.status})`
-    try {
-      const err = JSON.parse(raw)
-      if (typeof err.detail === 'string') msg = err.detail
-    } catch {
-      /* keep the generic message */
-    }
-    throw new Error(msg)
-  }
-  return res.json() as Promise<EftProofResult>
-}
-
-export async function apiListEftPayments(): Promise<EftAdminClaim[]> {
-  return request<EftAdminClaim[]>('/api/v1/admin/payments')
-}
-
-export async function apiConfirmEftPayment(claimId: string): Promise<void> {
-  return request(`/api/v1/admin/payments/${claimId}/confirm`, { method: 'POST' })
-}
-
-export async function apiRejectEftPayment(claimId: string): Promise<void> {
-  return request(`/api/v1/admin/payments/${claimId}/reject`, { method: 'POST' })
 }
 
 /** Revokes every token for this user — including the caller's own. */

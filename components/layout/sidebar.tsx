@@ -11,7 +11,6 @@ import {
   FileSearch,
   History,
   ShieldCheck,
-  Lock,
   LogOut,
   FolderOpen,
 } from 'lucide-react'
@@ -27,30 +26,19 @@ interface NavItem {
   label: string
   href: string
   icon: React.ElementType
-  pro?: boolean
 }
 
 export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
-  const plan = user?.plan ?? 'free'
-  const isPro = plan === 'pro' || plan === 'business'
-
   const navItems: NavItem[] = [
     { label: 'Overview',   href: '/overview',    icon: LayoutDashboard },
     { label: 'Organize',   href: '/organize',    icon: Sparkles        },
-    { label: 'Rules',      href: '/rules',       icon: Filter,         pro: true },
-    { label: 'Insights',   href: '/insights',    icon: BarChart2,      pro: true },
+    { label: 'Rules',      href: '/rules',       icon: Filter          },
+    { label: 'Insights',   href: '/insights',    icon: BarChart2       },
     { label: 'Documents',  href: '/documents',   icon: FileSearch      },
-    { label: 'History',    href: '/history',     icon: History,        pro: true },
+    { label: 'History',    href: '/history',     icon: History         },
   ]
-
-  function handleNavClick(item: NavItem, e: React.MouseEvent) {
-    if (item.pro && !isPro) {
-      e.preventDefault()
-      router.push('/upgrade')
-    }
-  }
 
   function handleSignOut() {
     signOut()
@@ -59,23 +47,18 @@ export function Sidebar({ user }: SidebarProps) {
 
   function NavLink({ item }: { item: NavItem }) {
     const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
-    const locked = item.pro && !isPro
 
     return (
       <Link
-        href={locked ? '/upgrade' : item.href}
-        onClick={(e) => handleNavClick(item, e)}
+        href={item.href}
         className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
           isActive
             ? 'bg-primary/8 text-primary font-medium'
-            : locked
-            ? 'text-muted-foreground/30 cursor-pointer hover:text-muted-foreground/50'
             : 'text-muted-foreground hover:bg-accent hover:text-foreground'
         }`}
       >
         <item.icon size={16} className="shrink-0" />
         <span className="flex-1 truncate">{item.label}</span>
-        {locked && <Lock size={12} className="shrink-0 text-muted-foreground/30" />}
       </Link>
     )
   }

@@ -114,15 +114,6 @@ async def classify_files(
     ai_calls = 0
 
     if needs_ai:
-        estimated = len(needs_ai) * _TOKENS_PER_FILE_ESTIMATE
-        try:
-            await gemini_svc.check_budget(user_id, estimated)
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail=str(exc),
-            )
-
         # ── Step 4: Groq batch call ────────────────────────────────────────────
         try:
             ai_results, usage = await gemini_svc.classify_batch(

@@ -51,15 +51,6 @@ async def explain_file(
             tokens_used=0,
         )
 
-    # Budget check
-    try:
-        await gemini_svc.check_budget(user_id, _EXPLAIN_TOKEN_ESTIMATE)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=str(exc),
-        )
-
     try:
         result, _ = await gemini_svc.explain_file(
             filename=body.filename,

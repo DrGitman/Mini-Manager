@@ -42,31 +42,6 @@ class Settings(BaseSettings):
     # JWT
     jwt_secret: str
 
-    # ── EFT payments (Namibia) ───────────────────────────────────────────────
-    # Shown to the customer on the payment page. Set these in .env — they are
-    # real banking details and do not belong in the repo.
-    eft_account_name: str = ""
-    eft_bank_name: str = ""
-    eft_account_number: str = ""
-    eft_branch_code: str = ""
-    # Currency the receiving account actually holds. NAD for FNB Namibia,
-    # ZAR for FNB South Africa — they are pegged 1:1 but are different codes,
-    # and a mismatch causes every proof to be rejected.
-    eft_currency: str = "NAD"
-    # Price for each plan, and how long a claim stays open.
-    eft_amount_pro: float = 349.00
-    eft_amount_business: float = 899.00
-    eft_claim_expiry_days: int = 7
-    # Proofs at or above this confidence, with all hard checks passing, are
-    # activated autonomously. Below it, the agent defers to human review.
-    eft_auto_activate_confidence: float = 0.85
-    # Account allowed to reconcile payments. Empty = admin endpoints are closed.
-    # This is an access check against the login token — nothing is emailed to it.
-    eft_admin_email: str = ""
-    # Shown to customers who would rather email their proof than upload it.
-    # Leave empty to hide that option entirely.
-    eft_proof_email: str = ""
-
     # CORS
     frontend_url: str = "https://mini-manager.vercel.app"
     # Comma-separated extra origins allowed to call the API (preview deploys,
@@ -75,11 +50,6 @@ class Settings(BaseSettings):
 
     # Optional
     environment: str = "production"
-
-    # Paddle
-    paddle_sandbox_api_key: str = ""
-    paddle_webhook_secret: str = ""
-    paddle_price_id_pro: str = ""
 
     # Google OAuth
     google_client_id: str = ""

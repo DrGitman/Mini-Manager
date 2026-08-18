@@ -326,11 +326,6 @@ export default function ProfilePage() {
                   <h2 className="text-xl font-semibold text-foreground truncate">{user?.name ?? '—'}</h2>
                   <p className="text-sm text-muted-foreground truncate">{user?.email ?? '—'}</p>
                   <div className="flex items-center gap-3 mt-1.5">
-                    {user?.plan === 'pro' ? (
-                      <Badge className="bg-primary text-primary-foreground">Pro</Badge>
-                    ) : (
-                      <Badge variant="secondary">Free</Badge>
-                    )}
                     <span className="text-xs text-muted-foreground">Member since {joinedDate}</span>
                   </div>
                 </>
