@@ -202,9 +202,6 @@ key behind that prefix.
 
 ## Pre-existing Work
 
-> Review and confirm this section yourself before submitting it anywhere. It is a
-> statement about your own work and should be in your words.
-
 Development on this repository began on **6 August 2026**. The file scanner, safety
 layer, classification pipeline, undo journal, authentication and user interface were
 built between 6 and 18 August 2026.
