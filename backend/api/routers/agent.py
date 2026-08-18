@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from ..config import settings
 from ..middleware.auth import get_current_user
 from ..services import gemini as gemini_svc
+from ..services import kernel
 from .notifications import create_notification
 
 logger = logging.getLogger(__name__)
@@ -329,42 +330,27 @@ EXT_GROUPS: dict[str, list[str]] = {
 
 # Paths the agent must never touch, however confidently it is asked. Matched
 # case-insensitively against the whole path.
-_PROTECTED_FRAGMENTS = (
-    "c:\\windows", "c:\\program files", "c:\\programdata",
-    "\\appdata\\", "\\system32", "\\$recycle.bin",
-    "node_modules", "\\.git\\", "\\venv\\", "\\.venv\\",
-)
+# ─── Safety ───────────────────────────────────────────────────────────────────
+#
+# These delegate to the kernel (services/kernel.py), which is the single place
+# filesystem safety is decided. They are kept as thin wrappers so existing call
+# sites read unchanged; there is deliberately no second implementation here.
+
+_PROTECTED_FRAGMENTS = kernel.PROTECTED_FRAGMENTS
 
 
 def _is_protected(path: pathlib.Path) -> bool:
-    p = str(path).lower().replace("/", "\\")
-    if any(frag in p for frag in _PROTECTED_FRAGMENTS):
-        return True
-    # A bare drive root — "organise C:\" would otherwise walk the whole disk.
-    return len(path.parts) <= 1
-
-
-def _quarantine_dir(original: pathlib.Path) -> pathlib.Path:
-    """
-    Where 'deleted' things actually go. Kept beside the original so it stays on
-    the same drive — a cross-drive move is a copy+delete, which is exactly what
-    we're avoiding.
-    """
-    root = original.parent / "_Mini Manager Archive"
-    root.mkdir(parents=True, exist_ok=True)
-    return root
+    return kernel.is_protected(path)
 
 
 def _safe_archive(p: pathlib.Path) -> str:
     """Move to the archive instead of deleting. Never overwrites."""
-    dest_dir = _quarantine_dir(p)
-    dest = dest_dir / p.name
-    n = 1
-    while dest.exists():
-        dest = dest_dir / f"{p.stem} ({n}){p.suffix}"
-        n += 1
-    shutil.move(str(p), str(dest))
-    return str(dest)
+    return kernel.archive(p)
+
+
+def _safe_dest(dst: pathlib.Path) -> pathlib.Path:
+    """Avoid overwriting: append (1), (2) … until unique."""
+    return kernel.disambiguate(dst)
 
 
 def _ext_group(ext: str) -> str:
@@ -373,18 +359,6 @@ def _ext_group(ext: str) -> str:
         if ext in exts:
             return group
     return "Other"
-
-def _safe_dest(dst: pathlib.Path) -> pathlib.Path:
-    """Avoid overwriting: append (1), (2) … until unique."""
-    if not dst.exists():
-        return dst
-    stem, suffix = dst.stem, dst.suffix
-    i = 1
-    while True:
-        candidate = dst.parent / f"{stem} ({i}){suffix}"
-        if not candidate.exists():
-            return candidate
-        i += 1
 
 def _execute_operations(operations: list[dict]) -> list[dict]:
     results: list[dict] = []

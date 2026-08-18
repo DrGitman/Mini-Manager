@@ -10,13 +10,29 @@ Run: backend/api/.venv/Scripts/python.exe -m pytest backend/api/tests -q
 from __future__ import annotations
 
 import pathlib
+import shutil
 import sys
+import tempfile
 
 import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[3]))
 
 from backend.api.services import kernel
+
+
+@pytest.fixture()
+def workspace(tmp_path_factory):
+    """
+    A scratch folder outside AppData.
+
+    pytest's default tmp_path lives under the AppData temp folder, which the
+    kernel refuses by design. Using it would make these tests exercise the
+    blocklist rather than the behaviour they are about.
+    """
+    root = pathlib.Path(__file__).resolve().parents[3] / ".pytest-workspace"
+    root.mkdir(exist_ok=True)
+    return pathlib.Path(tempfile.mkdtemp(dir=root))
 
 
 # ─── Protected paths ──────────────────────────────────────────────────────────
@@ -84,8 +100,8 @@ def test_disambiguation_never_loses_the_extension(tmp_path):
 
 # ─── Archive instead of delete ────────────────────────────────────────────────
 
-def test_archive_moves_the_file_rather_than_deleting_it(tmp_path):
-    src = tmp_path / "old.txt"
+def test_archive_moves_the_file_rather_than_deleting_it(workspace):
+    src = workspace / "old.txt"
     src.write_text("keep me")
 
     dest = pathlib.Path(kernel.archive(src))
@@ -95,20 +111,20 @@ def test_archive_moves_the_file_rather_than_deleting_it(tmp_path):
     assert dest.read_text() == "keep me", "contents must survive"
 
 
-def test_archive_lands_beside_the_original(tmp_path):
+def test_archive_lands_beside_the_original(workspace):
     """Same drive — a cross-drive move is a copy plus a delete."""
-    src = tmp_path / "old.txt"
+    src = workspace / "old.txt"
     src.write_text("x")
     dest = pathlib.Path(kernel.archive(src))
-    assert dest.parent.parent == tmp_path
+    assert dest.parent.parent == workspace
 
 
-def test_archiving_twice_does_not_overwrite(tmp_path):
-    first = tmp_path / "dup.txt"
+def test_archiving_twice_does_not_overwrite(workspace):
+    first = workspace / "dup.txt"
     first.write_text("first")
     dest_one = pathlib.Path(kernel.archive(first))
 
-    second = tmp_path / "dup.txt"
+    second = workspace / "dup.txt"
     second.write_text("second")
     dest_two = pathlib.Path(kernel.archive(second))
 
