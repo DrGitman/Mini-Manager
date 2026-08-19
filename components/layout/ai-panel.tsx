@@ -19,6 +19,8 @@ import {
 } from '@/lib/folder-digests'
 import type { AgentStep, AgentQuestion } from '@/lib/api'
 import { getSession } from '@/lib/session'
+import { streamAgent, type AgentInterrupt } from '@/lib/agent-stream'
+import { useStrandsAgent } from '@/lib/flags'
 
 const eAPI = typeof window !== 'undefined' ? (window as any).electronAPI : undefined
 const isElectron = !!eAPI?.isElectron
@@ -100,6 +102,8 @@ interface ChatMessage {
   pending?: AgentOperation[]
   /** Set once the user has answered, so the buttons stop being offered. */
   decision?: 'applied' | 'cancelled'
+  /** The agent stopped to ask something. Answered via /agent/v2/resume. */
+  interrupt?: AgentInterrupt
 }
 
 interface Session {
@@ -151,6 +155,37 @@ function MessageBody({ text, inBubble = false }: { text: string; inBubble?: bool
   )
 }
 
+
+/**
+ * A readable label for a tool that is running.
+ *
+ * These are shown as the agent works, so they are written in the present tense
+ * and name the thing the user cares about — the folder, not the function.
+ */
+function describeTool(name: string, input?: unknown): string {
+  let args: Record<string, unknown> = {}
+  if (typeof input === 'string') {
+    try { args = JSON.parse(input) } catch { args = {} }
+  } else if (input && typeof input === 'object') {
+    args = input as Record<string, unknown>
+  }
+  const folder = (args.folder_name as string) || ''
+
+  switch (name) {
+    case 'scan_folder':        return folder ? `Looking through ${folder}` : 'Looking through your folders'
+    case 'query_files':        return 'Counting files'
+    case 'find_stale':         return 'Finding files you have not touched in a while'
+    case 'check_rules':        return 'Checking your filing rules'
+    case 'recall_corrections': return 'Recalling your past corrections'
+    case 'classify_files':     return folder ? `Working out where ${folder} should go` : 'Working out where things belong'
+    case 'check_sensitive':    return 'Checking for anything private'
+    case 'propose_changes':    return 'Deciding what needs your say-so'
+    case 'apply_changes':      return 'Preparing the approved changes'
+    case 'quarantine':         return 'Moving things to the Archive'
+    case 'notify_user':        return 'Asking you about something'
+    default:                   return name.replace(/_/g, ' ')
+  }
+}
 
 // ─── Pending-change confirmation ──────────────────────────────────────────────
 
@@ -802,6 +837,7 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
   const [showHistory, setShowHistory] = useState(false)
   const [palette, setPalette] = useState<PaletteState | null>(null)
   const [applying, setApplying] = useState<string | null>(null)
+  const strandsEnabled = useStrandsAgent()
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -950,6 +986,75 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
 
   function stopListening() { recognitionRef.current?.stop(); setListening(false) }
 
+  /**
+   * Send a message through the Strands agent, streaming its work back.
+   *
+   * The completion chip is set from the `done` event listing the tools that
+   * actually executed — never from a reply arriving. That was the original
+   * phantom-task bug, and it is the same shape of error as asserting the
+   * absence of a problem rather than the presence of the right result.
+   */
+  async function sendViaStrands(txt: string, history: ChatMessage[]) {
+    const msgId = `ai-${Date.now()}`
+    const context = await refreshAgentContext(RESCAN_RE.test(txt))
+    const session = getSession()
+
+    // The message starts as "working" and is filled in as events arrive.
+    setMessages(prev => [...prev, {
+      id: msgId, role: 'ai', text: '', ts: Date.now(),
+      status: 'working', steps: [],
+    }])
+
+    const ran: string[] = []
+
+    const patch = (fn: (m: ChatMessage) => ChatMessage) =>
+      setMessages(prev => prev.map(m => (m.id === msgId ? fn(m) : m)))
+
+    await streamAgent(
+      {
+        message: txt,
+        scanContext: context,
+        sessionId: session ? `${session.email}:${activeId}` : undefined,
+      },
+      {
+        onText: chunk => patch(m => ({ ...m, text: m.text + chunk })),
+
+        // A tool event means it is running, not that it was planned.
+        onTool: tool => {
+          ran.push(tool.name)
+          patch(m => ({
+            ...m,
+            steps: [
+              ...(m.steps ?? []),
+              { label: describeTool(tool.name, tool.input), status: 'done' },
+            ] as AgentStep[],
+          }))
+        },
+
+        onInterrupt: interrupt => {
+          patch(m => ({ ...m, status: undefined, interrupt }))
+        },
+
+        // Only here does the turn count as complete, and only if work ran.
+        onDone: ({ toolsCalled }) => {
+          const executed = (toolsCalled ?? ran).length > 0
+          patch(m => ({
+            ...m,
+            status: executed && !m.interrupt ? 'complete' : undefined,
+          }))
+        },
+
+        onError: message => {
+          patch(m => ({
+            ...m,
+            status: 'failed',
+            text: m.text || message,
+          }))
+        },
+      },
+    )
+  }
+
   async function sendMessage(text?: string) {
     const txt = (text ?? input).trim()
     if (!txt || thinking) return
@@ -963,6 +1068,11 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
     setThinking(true)
 
     try {
+      if (strandsEnabled) {
+        await sendViaStrands(txt, history)
+        return
+      }
+
       const wantsRescan = RESCAN_RE.test(txt)
       let context = await refreshAgentContext(wantsRescan)
 
