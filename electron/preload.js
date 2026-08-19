@@ -29,6 +29,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('get-user-paths'),
 
   /**
+   * Show a desktop notification. Returns { shown, reason? } so the caller can
+   * fall back to an in-app badge rather than assuming it appeared.
+   */
+  showNotification: (opts) =>
+    ipcRenderer.invoke('show-notification', opts),
+
+  /**
    * Check a folder is real and readable before saving it to the scan scope.
    * @returns {{ ok: boolean, error?: string }}
    */

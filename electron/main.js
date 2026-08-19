@@ -3,7 +3,7 @@
  * Loads the Next.js app and provides native file-system IPC handlers.
  */
 
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeImage, session } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeImage, session, Notification } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const crypto = require('crypto')
@@ -379,6 +379,41 @@ ipcMain.handle('path-exists', async (_, dirPath) => {
     if (code === 'ENOENT') return { ok: false, error: 'That folder does not exist.' }
     if (code === 'EPERM' || code === 'EACCES') return { ok: false, error: 'No permission to read that folder.' }
     return { ok: false, error: 'That folder could not be opened.' }
+  }
+})
+
+
+/**
+ * Show a desktop notification.
+ *
+ * Used when the agent has stopped to ask something. The body is the agent's own
+ * sentence — "I left your passport scan alone, it looks like an identity
+ * document" — rather than a count, because a count is a status bar and a
+ * sentence is a reason.
+ *
+ * Clicking it brings the window forward, since the thing being reported is
+ * waiting inside the app.
+ */
+ipcMain.handle('show-notification', async (_, opts = {}) => {
+  if (!Notification.isSupported()) return { shown: false, reason: 'unsupported' }
+
+  try {
+    const n = new Notification({
+      title: opts.title || 'Mini Manager',
+      body: opts.body || '',
+      icon: path.join(__dirname, 'assets', 'icon.png'),
+      silent: false,
+    })
+    n.on('click', () => {
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore()
+        mainWindow.focus()
+      }
+    })
+    n.show()
+    return { shown: true }
+  } catch (err) {
+    return { shown: false, reason: String(err && err.message) }
   }
 })
 

@@ -78,7 +78,8 @@ class RunRecorder:
                         result.user_id, result.run_id, result.run_id,
                         esc.get("reason", "low_confidence"),
                         json.dumps([esc]),
-                        esc.get("why", ""),
+                        # The agent's own sentence, not the category.
+                        esc.get("agent_note") or esc.get("why", ""),
                         json.dumps(["Apply it", "Leave it", "Ask me later"]),
                     )
 
@@ -165,18 +166,26 @@ async def start_run(
         recorder=RunRecorder(),
     )
 
+    # The notification carries the agent's own words, not a count. "3 files
+    # need your review" is a form field; "I left your passport scan alone — it
+    # looks like an identity document" is the agent explaining itself, and that
+    # is the thing worth being interrupted by.
     if result.escalation_count:
+        first_note = next(
+            (e.get("agent_note") for e in result.escalations if e.get("agent_note")),
+            "",
+        )
         await create_notification(
             user_id=user["sub"],
             kind="agent",
-            title=f"{result.escalation_count} file(s) need your decision",
+            title=first_note or f"{result.escalation_count} file(s) need your decision",
             body=result.summary,
         )
     elif result.files_applied:
         await create_notification(
             user_id=user["sub"],
             kind="agent",
-            title=f"Tidied {result.files_applied} file(s) while you were away",
+            title=result.summary.split(".")[0][:120] or "I tidied up while you were away",
             body=result.summary,
         )
 

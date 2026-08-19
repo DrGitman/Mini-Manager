@@ -31,6 +31,9 @@ export interface ElectronAPI {
   scanDirectory: (dirPath: string) => Promise<{ files: ScannedFile[]; folders: unknown[] }>
   /** Real Downloads/Desktop/Documents paths — never guess these from a username. */
   getUserPaths: () => Promise<UserPaths>
+  /** Desktop notification. Returns whether it was actually shown. */
+  showNotification: (opts: { title: string; body?: string }) =>
+    Promise<{ shown: boolean; reason?: string }>
   /** Verify a folder is real and readable before saving it to the scan scope. */
   pathExists: (dirPath: string) => Promise<{ ok: boolean; error?: string }>
   moveFile: (fromPath: string, toPath: string) => Promise<void>

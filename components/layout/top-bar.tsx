@@ -3,7 +3,8 @@
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import { useEffect, useState, useCallback } from 'react'
-import { Bell, Settings, User, LogOut, Sparkles, ScanLine, Undo2, ListPlus, BarChart3, Archive } from 'lucide-react'
+import { announceNewEscalations, type Escalation } from '@/lib/escalations'
+import { Bell, Settings, User, LogOut, Sparkles, ScanLine, Undo2, ListPlus, BarChart3, Archive, ShieldQuestion } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -61,6 +62,27 @@ export function TopBar({ unreadCount, user, aiOpen, onAiToggle }: TopBarProps) {
   const pathname = usePathname()
   const title = getTitle(pathname)
   const [recents, setRecents] = useState<string[]>([])
+  const [escalations, setEscalations] = useState<Escalation[]>([])
+
+  // Anything the agent stopped to ask about, including from a run that happened
+  // while the app was closed. Polled rather than pushed: there is no socket, and
+  // a run takes minutes, so a slow poll is enough.
+  useEffect(() => {
+    let cancelled = false
+
+    const check = async () => {
+      try {
+        const open = await announceNewEscalations()
+        if (!cancelled) setEscalations(open)
+      } catch {
+        // The badge is not worth surfacing an error over.
+      }
+    }
+
+    check()
+    const timer = setInterval(check, 60_000)
+    return () => { cancelled = true; clearInterval(timer) }
+  }, [])
 
   useEffect(() => {
     setRecents(loadRecents())
@@ -187,6 +209,23 @@ export function TopBar({ unreadCount, user, aiOpen, onAiToggle }: TopBarProps) {
         >
           <Sparkles className="size-4" />
         </button>
+
+        {/* Escalations — the agent waiting on a decision.
+            Amber rather than the usual primary, and shown ahead of ordinary
+            notifications, because this is the one thing that is actually
+            blocked on the user. The tooltip carries the agent's own sentence. */}
+        {escalations.length > 0 && (
+          <Link
+            href="/notifications"
+            title={escalations[0]?.agent_note || 'The assistant needs a decision'}
+            className="relative flex size-8 items-center justify-center rounded-lg text-amber-600 transition-colors hover:bg-amber-50 dark:hover:bg-amber-950/30"
+          >
+            <ShieldQuestion className="size-4" />
+            <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-white">
+              {escalations.length > 9 ? '9+' : escalations.length}
+            </span>
+          </Link>
+        )}
 
         {/* Notifications */}
         <Link

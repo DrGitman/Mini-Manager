@@ -257,6 +257,80 @@ async def write_summary(result: RunResult) -> str:
     )
 
 
+async def write_escalation_notes(result: RunResult) -> None:
+    """
+    Have the agent say, in its own words, why it left each file alone.
+
+    Without this the note stored against an escalation is "private (identity)" —
+    a category, not a reason. It reads like a form field because it is one, and
+    it is the first thing the user sees when the agent interrupts them.
+
+    "I left your passport scan where it was — it looks like an identity
+    document and I would rather you decided" is the agent explaining itself.
+    That difference is the whole product, so it is worth one extra call.
+
+    Written back onto result.escalations in place. Failure is not fatal: the
+    structured reason is still there, and a run without prose is still a run.
+    """
+    if not result.escalations:
+        return
+
+    listing = "\n".join(
+        f"- {e.get('file')} (in {e.get('folder')}, flagged {e.get('reason')})"
+        for e in result.escalations[:20]
+    )
+
+    try:
+        writer = Agent(
+            model=GeminiModel(
+                client_args={"api_key": settings.gemini_api_key},
+                model_id=settings.gemini_model,
+            ),
+            system_prompt=(
+                "You tidied someone's folders and left some files alone. For each "
+                "one, write a single short sentence to them explaining why you did "
+                "not touch it.\n\n"
+                "Write as yourself, to them, in plain words. Do not repeat the "
+                "filename back mechanically and do not use labels like "
+                "'sensitivity: identity'. Say what you thought it was and why that "
+                "made you stop.\n\n"
+                "Return only lines of the form:\n"
+                "filename :: your sentence\n\n"
+                "One line per file, nothing else."
+            ),
+            callback_handler=None,
+        )
+        reply = str(await writer.invoke_async(
+            f"These are the files I left alone:\n{listing}\n\nWrite the lines."
+        )).strip()
+
+        notes: dict[str, str] = {}
+        for line in reply.splitlines():
+            if "::" not in line:
+                continue
+            name, _, sentence = line.partition("::")
+            notes[name.strip().lstrip("-").strip().lower()] = sentence.strip()
+
+        for esc in result.escalations:
+            key = str(esc.get("file", "")).lower()
+            if key in notes and notes[key]:
+                esc["agent_note"] = notes[key]
+
+    except Exception as exc:                       # noqa: BLE001 - prose is not the job
+        logger.warning("Could not write escalation notes: %s", exc)
+
+    # Anything the model did not cover keeps a readable fallback rather than a
+    # blank field.
+    for esc in result.escalations:
+        if not esc.get("agent_note"):
+            esc["agent_note"] = (
+                f"I left {esc.get('file')} where it was — it looks private, "
+                "so I would rather you decided."
+                if esc.get("reason") == "sensitive"
+                else f"I was not confident enough about {esc.get('file')} to move it."
+            )
+
+
 async def run_autonomously(
     user_id: str,
     digests: list[dict],
@@ -282,6 +356,9 @@ async def run_autonomously(
     for digest in digests:
         await run_one_folder(digest, prefs or {}, result)
 
+    # The agent explains itself before anything is recorded, so the note
+    # stored against an escalation is its own words rather than a category.
+    await write_escalation_notes(result)
     result.summary = await write_summary(result)
 
     if recorder is not None:
