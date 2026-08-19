@@ -46,9 +46,17 @@ class ApprovalHook(HookProvider):
     durable object with options, not a console confirmation.
     """
 
-    def __init__(self, agent_state_reader=None) -> None:
+    def __init__(self, agent_state_reader=None, mode: str = "interactive") -> None:
         # Injected so tests can drive the hook without building a whole agent.
         self._read_state = agent_state_reader
+        # "interactive" — a person is waiting, so pause and ask.
+        # "autonomous"  — nobody is watching. Interrupting would hang the run
+        #                 forever, so refuse the tool and record the question
+        #                 for the user to answer later.
+        self.mode = mode
+        # What the run needs to escalate afterwards. Populated in autonomous
+        # mode; the interactive path uses the interrupt instead.
+        self.deferred: list[dict] = []
 
     def register_hooks(self, registry: HookRegistry, **kwargs: Any) -> None:
         registry.add_callback(BeforeToolCallEvent, self.check)
@@ -85,6 +93,25 @@ class ApprovalHook(HookProvider):
 
         needs_asking = unapproved or private
         if not needs_asking:
+            return
+
+        if self.mode == "autonomous":
+            # A scheduled run has no one to answer, so asking would block it
+            # indefinitely. Refuse the tool, remember the question, carry on.
+            self.deferred.append({
+                "tool": name,
+                "disposition": requested,
+                "files": [
+                    {"name": f.get("name"), "target": f.get("target_folder"),
+                     "why": f.get("why"), "sensitivity": f.get("sensitivity", "none")}
+                    for f in needs_asking
+                ],
+            })
+            event.cancel_tool = (
+                f"{len(needs_asking)} of these need a decision from the user. "
+                "Recorded for them to review; not applied."
+            )
+            logger.info("approval: %s deferred — %d file(s) need a human", name, len(needs_asking))
             return
 
         answer = event.interrupt(

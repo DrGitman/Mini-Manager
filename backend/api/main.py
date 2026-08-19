@@ -20,7 +20,7 @@ from .routers import (
     auth, classify, explain, scans, preferences, agent,
     stats, notifications, rules, profile, insights, search, journal, mfa, privacy,
     corrections, blocklist, conventions, support_agent, onboarding, business_agents,
-    agent_v2,
+    agent_v2, runs,
 )
 from .services.db import close_pool, init_pool
 
@@ -142,6 +142,8 @@ app.include_router(agent.router,         prefix=_PREFIX)
 # The Strands agent. Runs alongside the old route while the tool layer is
 # built out; nothing points at it yet.
 app.include_router(agent_v2.router,      prefix=_PREFIX)
+# Autonomous runs — the desktop app asks whether one is due.
+app.include_router(runs.router,          prefix=_PREFIX)
 app.include_router(stats.router,         prefix=_PREFIX)
 app.include_router(notifications.router, prefix=_PREFIX)
 app.include_router(rules.router,         prefix=_PREFIX)
