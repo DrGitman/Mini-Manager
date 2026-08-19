@@ -31,6 +31,17 @@ logger = logging.getLogger(__name__)
 _warned_ephemeral = False
 
 
+class SessionBackendError(RuntimeError):
+    """
+    The configured session store is unusable.
+
+    Raised rather than degrading, because falling back to local files would
+    pass every test and then lose interrupt state on the first deploy — with
+    no error anywhere, and the only symptom being escalated runs that never
+    resume.
+    """
+
+
 def build_session_manager(session_id: str):
     """
     A session manager for this conversation, or None to run without persistence.
@@ -45,19 +56,55 @@ def build_session_manager(session_id: str):
         return None
 
     if backend == "s3":
+        # Asking for S3 and quietly getting local files is the worst outcome:
+        # every test passes, and the only symptom in production is that
+        # escalated runs never resume — silently, and only after a deploy.
+        # So a misconfigured S3 backend is a startup failure, not a fallback.
         bucket = getattr(settings, "session_s3_bucket", "")
         if not bucket:
-            logger.error(
-                "SESSION_BACKEND=s3 but SESSION_S3_BUCKET is unset — "
-                "falling back to local files, which do not survive a deploy."
+            raise SessionBackendError(
+                "SESSION_BACKEND=s3 but SESSION_S3_BUCKET is not set. "
+                "Set the bucket, or set SESSION_BACKEND=file if that is what you meant."
             )
-        else:
-            from strands.session.s3_session_manager import S3SessionManager
-            return S3SessionManager(
-                session_id=session_id,
-                bucket=bucket,
-                prefix=getattr(settings, "session_s3_prefix", "sessions/"),
+
+        from strands.session.s3_session_manager import S3SessionManager
+
+        kwargs = {
+            "session_id": session_id,
+            "bucket": bucket,
+            "prefix": getattr(settings, "session_s3_prefix", "sessions/"),
+        }
+        region = getattr(settings, "session_s3_region", "")
+        if region:
+            kwargs["region_name"] = region
+
+        # Build the boto3 session explicitly when credentials are configured.
+        # pydantic reads .env into settings; boto3 reads os.environ. Those are
+        # different places, so a local .env would otherwise leave boto3 with no
+        # credentials while every other setting loaded fine.
+        key = getattr(settings, "aws_access_key_id", "")
+        secret = getattr(settings, "aws_secret_access_key", "")
+        if key and secret:
+            import boto3
+            kwargs["boto_session"] = boto3.Session(
+                aws_access_key_id=key,
+                aws_secret_access_key=secret,
+                region_name=region or None,
             )
+
+        try:
+            manager = S3SessionManager(**kwargs)
+        except Exception as exc:
+            raise SessionBackendError(
+                f"Could not open the S3 session store (bucket {bucket!r}, "
+                f"region {region or 'from environment'}): {exc}"
+            ) from exc
+
+        logger.info(
+            "Agent sessions: S3 bucket %s (region %s)",
+            bucket, region or "from environment",
+        )
+        return manager
 
     from strands.session.file_session_manager import FileSessionManager
 

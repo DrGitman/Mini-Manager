@@ -40,6 +40,22 @@ services:
       - key: EXTRA_CORS_ORIGINS    # optional, comma-separated
         sync: false
 
+      # ── Agent session persistence ────────────────────────────────────────
+      # Where a paused agent waits while it asks the user something.
+      # Render's disk is ephemeral, so "file" here loses any pending
+      # interrupt on every deploy — production needs s3.
+      - key: SESSION_BACKEND       # file | s3 | none
+        value: s3
+      - key: SESSION_S3_BUCKET
+        sync: false
+      - key: SESSION_S3_REGION     # e.g. eu-north-1
+        sync: false
+      # Credentials for that bucket. Read by boto3, not by our config.
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+
 
   # ── Frontend (Next.js) ─────────────────────────────────────────────────────
   - type: web

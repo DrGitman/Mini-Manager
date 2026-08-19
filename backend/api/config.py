@@ -50,6 +50,15 @@ class Settings(BaseSettings):
     session_dir: str = ".agent-sessions"
     session_s3_bucket: str = ""
     session_s3_prefix: str = "sessions/"
+    # Passed to S3SessionManager explicitly. Leaving it empty makes the region
+    # depend on boto3 resolving AWS_REGION vs AWS_DEFAULT_REGION, which differs
+    # by botocore version — being explicit removes the guesswork.
+    session_s3_region: str = ""
+    # Read here as well as by boto3, so a .env file works locally exactly as
+    # real environment variables do on Render. Left empty, boto3 falls back to
+    # its own chain — instance roles, shared credentials file, and so on.
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
 
     # CORS
     frontend_url: str = "https://mini-manager.vercel.app"
