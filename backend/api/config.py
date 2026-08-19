@@ -42,6 +42,15 @@ class Settings(BaseSettings):
     # JWT
     jwt_secret: str
 
+    # ── Agent sessions ───────────────────────────────────────────────────────
+    # Where a paused agent is kept while it waits for a human. "file" is fine
+    # locally; Render's disk is ephemeral, so production needs "s3" or an
+    # interrupt waiting on a user is lost at the next deploy.
+    session_backend: str = "file"        # file | s3 | none
+    session_dir: str = ".agent-sessions"
+    session_s3_bucket: str = ""
+    session_s3_prefix: str = "sessions/"
+
     # CORS
     frontend_url: str = "https://mini-manager.vercel.app"
     # Comma-separated extra origins allowed to call the API (preview deploys,

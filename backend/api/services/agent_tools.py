@@ -20,11 +20,13 @@ from __future__ import annotations
 
 import datetime as _dt
 import logging
+import pathlib
 from typing import Any, Optional
 
 from strands import tool
 
 from ..models.schemas import FileItem
+from ..services import kernel
 from ..services import gemini as gemini_svc
 from ..services.heuristics import detect_sensitivity
 
@@ -40,6 +42,8 @@ SCAN_CONTEXT_KEY = "scan_context"
 CLASSIFICATIONS_KEY = "classifications"
 PROPOSAL_KEY = "proposal"
 PREFS_KEY = "preferences"
+EXECUTION_PLAN_KEY = "execution_plan"
+ESCALATION_KEY = "escalation"
 
 
 def _state(agent: Any, key: str) -> Any:
@@ -574,4 +578,207 @@ def propose_changes(agent=None) -> dict:
             for k, v in buckets.items() if v
         },
         "note": "Nothing has been changed. This is a decision, not an action.",
+    }
+
+
+# ─── Tier 3 — Act ─────────────────────────────────────────────────────────────
+#
+# Everything here either mutates the filesystem or creates authority to. Two
+# separate protections apply, and they are not the same thing:
+#
+#   The hook decides whether to ASK the user      (policy — see approval.py)
+#   The kernel decides what is PHYSICALLY PERMITTED (services/kernel.py)
+#
+# A hook failing to register must never produce an unsafe operation, so the
+# kernel is called unconditionally inside the tool rather than around it.
+#
+# Return-of-control: these tools do not touch a disk. The server cannot reach
+# C:\Users\...\Downloads. They validate, journal, and return a plan the desktop
+# app executes behind its own independent guard.
+
+def _plan_from(files: list[dict], scan_root: str = "") -> tuple[list[dict], list[dict]]:
+    """
+    Turn proposed changes into kernel-approved operations.
+
+    Returns (approved, refused). Anything the kernel refuses is dropped with its
+    reason rather than silently skipped — a refusal the user never sees is how
+    they end up believing something moved when it did not.
+    """
+    approved, refused = [], []
+
+    for f in files:
+        src = f.get("path") or ""
+        target = f.get("target_folder") or ""
+        new_name = f.get("new_name") or f.get("name") or ""
+        if not src or not target:
+            refused.append({"name": f.get("name"), "reason": "incomplete proposal"})
+            continue
+
+        dst = str(pathlib.Path(src).parent / target / new_name)
+
+        try:
+            op = kernel.guard(
+                kernel.Operation(type="move", src=src, dst=dst, scan_root=scan_root),
+            )
+            approved.append({
+                "type": "move_file",
+                "name": f.get("name"),
+                "source": op.src,
+                "destination": op.dst,
+                "reason": f.get("reason", ""),
+            })
+        except kernel.KernelRefusal as refusal:
+            logger.info("kernel refused %s: %s", f.get("name"), refusal.reason)
+            refused.append({"name": f.get("name"), "reason": refusal.reason})
+
+    return approved, refused
+
+
+@tool
+def apply_changes(disposition: str = "auto", agent=None) -> dict:
+    """Prepare the approved changes so the user's computer can carry them out.
+
+    Call this only after propose_changes, and only for changes the user has
+    agreed to. By default it applies just the "auto" set — the ones confident
+    enough not to need a decision.
+
+    Nothing here is deleted and nothing is overwritten. Every change is checked
+    and recorded before it runs, so all of it can be undone afterwards.
+
+    Args:
+        disposition: Which set to apply — "auto" for the confident ones, or
+            "review" once the user has looked at those. Never pass "escalate";
+            those are waiting on a decision that has not been made.
+    """
+    proposal = _state(agent, PROPOSAL_KEY) or {}
+    files = proposal.get("files") or []
+    if not files:
+        return {
+            "ok": False, "reason": "nothing_proposed",
+            "message": "Call propose_changes first.",
+        }
+
+    wanted = [f for f in files if f.get("disposition") == disposition]
+    if not wanted:
+        return {
+            "ok": False, "reason": "nothing_in_that_set",
+            "disposition": disposition,
+            "available": {
+                d: sum(1 for f in files if f.get("disposition") == d)
+                for d in ("auto", "review", "escalate")
+            },
+        }
+
+    approved, refused = _plan_from(wanted, proposal.get("scan_root", ""))
+    _set_state(agent, EXECUTION_PLAN_KEY, {"operations": approved})
+
+    return {
+        "ok": True,
+        "disposition": disposition,
+        "operations_ready": len(approved),
+        "refused_by_safety_checks": refused,
+        "note": (
+            "These are ready for the user's computer to carry out. Tell them what "
+            "will happen and that it can be undone. Do not claim it has happened yet."
+        ),
+    }
+
+
+@tool
+def quarantine(reason: str = "", agent=None) -> dict:
+    """Move files out of the way into the Archive, without deleting them.
+
+    Use this for "archive it", "put it away", "I don't need it now but don't
+    delete it". The file keeps existing and can be restored later.
+
+    This is not deleting. There is no tool that deletes, because this
+    application does not delete files.
+
+    Args:
+        reason: Why these are being archived, in a few words, for the history.
+    """
+    proposal = _state(agent, PROPOSAL_KEY) or {}
+    files = [f for f in (proposal.get("files") or []) if f.get("disposition") == "auto"]
+    if not files:
+        return {
+            "ok": False, "reason": "nothing_to_archive",
+            "message": "Call propose_changes first, or nothing qualified.",
+        }
+
+    operations, refused = [], []
+    for f in files:
+        src = f.get("path") or ""
+        if not src:
+            continue
+        try:
+            # Validated the same way a move is; archiving is a move with a
+            # destination the kernel chooses.
+            canonical = kernel.canonical(src)
+            if kernel.is_protected(canonical):
+                raise kernel.BlockedPath(str(canonical))
+            operations.append({
+                "type": "archive", "name": f.get("name"), "path": str(canonical),
+            })
+        except kernel.KernelRefusal as refusal:
+            refused.append({"name": f.get("name"), "reason": refusal.reason})
+
+    _set_state(agent, EXECUTION_PLAN_KEY, {"operations": operations})
+    return {
+        "ok": True,
+        "to_archive": len(operations),
+        "refused_by_safety_checks": refused,
+        "reason": reason,
+        "note": "Nothing is deleted. These can be restored from the Archive page.",
+    }
+
+
+@tool
+def notify_user(
+    reason: str,
+    agent_note: str,
+    options: str = "",
+    agent=None,
+) -> dict:
+    """Stop and ask the user a question you cannot answer on their behalf.
+
+    Interrupting someone has a cost, so use this only when you genuinely cannot
+    proceed: a private document, a change you are not confident about, or two
+    instructions that conflict.
+
+    Say plainly what you found and what you would do, and offer them a small
+    number of concrete choices. Do not ask an open question when you could
+    offer options.
+
+    Args:
+        reason: Why you stopped — "sensitive", "low_confidence" or "conflict".
+        agent_note: What you found and what you propose, in your own words,
+            written for the user to read.
+        options: The choices you are offering, comma-separated, for example
+            "Move them anyway, Leave them where they are, Ask me per file".
+    """
+    proposal = _state(agent, PROPOSAL_KEY) or {}
+    escalating = [
+        {"name": f.get("name"), "path": f.get("path"),
+         "why": f.get("why"), "target": f.get("target_folder")}
+        for f in (proposal.get("files") or [])
+        if f.get("disposition") == "escalate"
+    ]
+
+    choices = [o.strip() for o in options.split(",") if o.strip()]
+    pending = {
+        "reason": reason,
+        "agent_note": agent_note,
+        "options": choices,
+        "file_refs": escalating,
+    }
+    _set_state(agent, ESCALATION_KEY, pending)
+
+    logger.info("notify_user: %s — %d file(s)", reason, len(escalating))
+    return {
+        "ok": True,
+        "raised": True,
+        "reason": reason,
+        "files_awaiting_decision": len(escalating),
+        "options": choices,
+        "note": "The user has been asked. Do not act on these until they answer.",
     }

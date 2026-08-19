@@ -101,3 +101,4 @@ dist-electron/
 # Scratch space for kernel tests — outside AppData, which the kernel refuses.
 .pytest-workspace/
 .pytest_cache/
+.agent-sessions/
