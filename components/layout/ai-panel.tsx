@@ -1118,12 +1118,14 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
           patch(m => ({ ...m, status: undefined, interrupt }))
         },
 
-        // Only here does the turn count as complete, and only if work ran.
-        onDone: ({ toolsCalled }) => {
-          const executed = (toolsCalled ?? ran).length > 0
+        // A completion chip means the work landed — not that a tool was
+        // called. "You have no watched folders" is a tool executing perfectly
+        // and achieving nothing, and calling that complete is the phantom-task
+        // bug wearing a different hat.
+        onDone: ({ succeeded }) => {
           patch(m => ({
             ...m,
-            status: executed && !m.interrupt ? 'complete' : undefined,
+            status: succeeded && !m.interrupt ? 'complete' : undefined,
           }))
         },
 
@@ -1304,10 +1306,10 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
                   { label: describeTool(tool.name, tool.input), status: 'done' }] as AgentStep[],
         })),
         onInterrupt: interrupt => patch(m => ({ ...m, status: undefined, interrupt })),
-        onDone: ({ toolsCalled }) => patch(m => ({
+        onDone: ({ succeeded }) => patch(m => ({
           ...m,
-          // Same rule as a first turn: completion comes from work that ran.
-          status: (toolsCalled ?? []).length > 0 && !m.interrupt ? 'complete' : undefined,
+          // Same rule as a first turn: the chip follows work that landed.
+          status: succeeded && !m.interrupt ? 'complete' : undefined,
         })),
         onError: message => patch(m => ({ ...m, status: 'failed', text: m.text || message })),
       },

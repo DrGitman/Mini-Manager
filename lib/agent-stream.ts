@@ -35,8 +35,12 @@ export interface AgentStreamHandlers {
   onTool?: (tool: AgentToolEvent) => void
   /** The agent stopped to ask something. Resume with resumeAgent(). */
   onInterrupt?: (interrupt: AgentInterrupt) => void
-  /** The turn finished. `toolsCalled` is what actually ran. */
-  onDone?: (result: { toolsCalled: string[]; resumed?: boolean }) => void
+  /**
+   * The turn finished. `toolsCalled` is what ran; `succeeded` is whether it
+   * achieved anything. A tool returning "no folders are watched" executed
+   * perfectly and did nothing, so the two are not the same question.
+   */
+  onDone?: (result: { toolsCalled: string[]; succeeded: boolean; resumed?: boolean }) => void
   onError?: (message: string) => void
 }
 
@@ -102,6 +106,7 @@ async function consume(
         case 'interrupt': handlers.onInterrupt?.(payload as AgentInterrupt); break
         case 'done':      handlers.onDone?.({
                             toolsCalled: payload.tools_called ?? [],
+                            succeeded: Boolean(payload.succeeded),
                             resumed: payload.resumed,
                           }); break
         case 'error':     handlers.onError?.(payload.message ?? 'Something went wrong'); break

@@ -141,6 +141,11 @@ async def stream_agent(
     agent = build_agent(scan_context, preferences, session_id)
     seen_tools: set[str] = set()      # tool-use ids, for deduplication
     tool_names: set[str] = set()      # what actually ran, for the summary
+    # Whether the work SUCCEEDED, which is not the same as a tool having run.
+    # A tool that returns {"found": false} executed perfectly and achieved
+    # nothing — reporting that as "Task complete" is the phantom-task bug in a
+    # quieter form.
+    any_failed = False
 
     try:
         async for event in agent.stream_async(message):
@@ -172,7 +177,27 @@ async def stream_agent(
                         "session_id": session_id,
                     })
 
-        yield _sse("done", {"tools_called": sorted(tool_names)})
+            # Tool results come back as user messages; read their outcome
+            # rather than inferring success from the tool having been called.
+            message = event.get("message")
+            if message:
+                for block in (message.get("content") or []):
+                    if not isinstance(block, dict) or "toolResult" not in block:
+                        continue
+                    tr = block["toolResult"]
+                    if tr.get("status") == "error":
+                        any_failed = True
+                        continue
+                    for item in (tr.get("content") or []):
+                        text = item.get("text") or ""
+                        if '"ok": false' in text or '"found": false' in text:
+                            any_failed = True
+
+        yield _sse("done", {
+            "tools_called": sorted(tool_names),
+            # The client shows a completion chip only when work actually landed.
+            "succeeded": bool(tool_names) and not any_failed,
+        })
 
     except Exception as exc:                       # noqa: BLE001 - surfaced to the client
         logger.exception("agent/v2 failed: %s", exc)
