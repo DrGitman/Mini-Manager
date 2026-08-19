@@ -33,7 +33,9 @@ before resolving is how a path with ".." segments gets through.
 from __future__ import annotations
 
 import logging
+import ntpath
 import pathlib
+import posixpath
 import shutil
 from dataclasses import dataclass, replace
 from typing import Iterable, Literal, Optional
@@ -121,13 +123,28 @@ class Operation:
 
 def canonical(path: str | pathlib.Path) -> pathlib.Path:
     """
-    Resolve a path before anything reasons about it.
+    Normalise a path before anything reasons about it.
 
-    Must run first. `Downloads\\..\\..\\Windows\\System32` only reveals itself
-    as protected once resolved, so a blocklist check on the raw string is
+    Must run first. A path containing ".." segments only reveals itself as
+    protected once collapsed, so a blocklist check on the raw string is
     security theatre.
+
+    **Purely lexical — this never touches a filesystem.** Under
+    return-of-control the kernel validates the *user's* paths while running on
+    a *server*, and those paths do not exist here. `Path.resolve()` silently
+    treats an unrecognised path as relative and rebases it onto the server's
+    working directory, which turned "D:\\Sandbox\\Downloads\\notes.txt" into
+    "/opt/render/project/src/Documents/notes.txt" — a real destination, on the
+    wrong machine entirely.
+
+    Windows semantics are chosen by the shape of the path rather than by the
+    host OS, so a Windows path is normalised the same way whether this runs on
+    the user's laptop or a Linux container.
     """
-    return pathlib.Path(path).expanduser().resolve()
+    raw = str(path).strip()
+    looks_windows = (len(raw) > 1 and raw[1] == ":") or "\\" in raw
+    normalised = ntpath.normpath(raw) if looks_windows else posixpath.normpath(raw)
+    return pathlib.PureWindowsPath(normalised) if looks_windows else pathlib.PurePosixPath(normalised)
 
 
 def is_protected(path: pathlib.Path, extra: Optional[Iterable[str]] = None) -> bool:
@@ -170,13 +187,19 @@ def same_extension(src: pathlib.Path, dst: pathlib.Path) -> bool:
     return src.suffix.lower() == dst.suffix.lower()
 
 
-def disambiguate(dst: pathlib.Path) -> pathlib.Path:
+def disambiguate(dst: pathlib.PurePath | pathlib.Path | str) -> pathlib.Path:
     """
     Never overwrite. Appends " (1)", " (2)" … until the name is free.
 
     Silent overwriting is the one failure mode a user cannot undo from the
     journal, because the original bytes are already gone.
+
+    Only meaningful where the files are: this asks the local filesystem what
+    exists. canonical() returns a PurePath precisely because it must NOT do
+    that, so this converts to a concrete Path deliberately rather than by
+    accident.
     """
+    dst = pathlib.Path(str(dst))
     if not dst.exists():
         return dst
     stem, suffix = dst.stem, dst.suffix
@@ -194,6 +217,7 @@ def guard(
     op: Operation,
     blocklist: Optional[Iterable[str]] = None,
     journal=None,
+    check_filesystem: bool = False,
 ) -> Operation:
     """
     Validate one operation and return it with a safe, resolved destination.
@@ -231,7 +255,13 @@ def guard(
             raise ExtensionChanged(f"{src.name} -> {dst.name}")
 
     # 5. Never overwrite.
-    if op.dst:
+    #
+    # Only meaningful on the machine that owns the files. When the kernel is
+    # planning server-side, the destination does not exist here and asking
+    # whether it does would answer about the wrong disk — so the device
+    # disambiguates at execution time, where the answer is true. Its executor
+    # never overwrites either; this is one check in two places, not a gap.
+    if op.dst and check_filesystem:
         dst = disambiguate(dst)
 
     # 6. Length, checked last because disambiguation can add characters.
@@ -267,10 +297,12 @@ def archive(path: pathlib.Path, blocklist: Optional[Iterable[str]] = None) -> st
     This is what "delete" means in this application. The file keeps existing,
     keeps its contents, and can be restored from the Archive page.
     """
-    src = canonical(path)
-    if is_protected(src, blocklist):
-        raise BlockedPath(str(src))
+    checked = canonical(path)
+    if is_protected(checked, blocklist):
+        raise BlockedPath(str(checked))
 
+    # archive() runs where the files are, so a concrete Path is correct here.
+    src = pathlib.Path(str(checked))
     dest = disambiguate(archive_dir_for(src) / src.name)
     if len(str(dest)) > MAX_PATH:
         raise PathTooLong(str(dest))
@@ -281,8 +313,13 @@ def archive(path: pathlib.Path, blocklist: Optional[Iterable[str]] = None) -> st
 
 
 def move(op: Operation, blocklist: Optional[Iterable[str]] = None, journal=None) -> str:
-    """Execute a guarded move. Returns where the file actually ended up."""
-    approved = guard(op, blocklist=blocklist, journal=journal)
+    """
+    Execute a guarded move on this machine. Returns where the file ended up.
+
+    Only for use where the files actually live — it checks and touches the
+    filesystem, so check_filesystem is on.
+    """
+    approved = guard(op, blocklist=blocklist, journal=journal, check_filesystem=True)
     dest = pathlib.Path(approved.dst)
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(approved.src, str(dest))

@@ -142,12 +142,16 @@ def test_extension_comparison_ignores_case(workspace):
 # ─── No overwrite, enforced through the gate ──────────────────────────────────
 
 def test_guard_disambiguates_an_occupied_destination(workspace):
+    """Only when told to look — see the planning tests below for why."""
     src = workspace / "a.txt"
     src.write_text("new")
     taken = workspace / "b.txt"
     taken.write_text("existing")
 
-    approved = kernel.guard(Operation(type="move", src=str(src), dst=str(taken)))
+    approved = kernel.guard(
+        Operation(type="move", src=str(src), dst=str(taken)),
+        check_filesystem=True,
+    )
 
     assert approved.dst.endswith("b (1).txt")
     assert taken.read_text() == "existing", "the existing file must be untouched"
@@ -212,3 +216,62 @@ def test_move_records_the_final_destination_not_the_requested_one(workspace):
     assert final.endswith("b (1).txt")
     assert written[0].dst == final
     assert (workspace / "b.txt").read_text() == "already here"
+
+
+# ─── Planning on a server, for paths on someone else's machine ────────────────
+#
+# Found in production, not in testing. The kernel ran on Render and validated
+# Windows paths that do not exist there. Path.resolve() treats an unrecognised
+# path as relative and rebases it on the server's working directory, so a move
+# of D:\Sandbox\Downloads\notes.txt was approved with a destination of
+# /opt/render/project/src/Documents/notes.txt — a real path, on the wrong
+# machine entirely. It passed locally because Windows paths resolve plausibly
+# on Windows.
+
+def test_canonical_never_touches_the_filesystem():
+    """A path that exists nowhere must normalise to itself, not to the cwd."""
+    assert str(kernel.canonical(r"D:\Sandbox\Downloads\notes.txt")) == \
+        r"D:\Sandbox\Downloads\notes.txt"
+
+
+def test_windows_paths_keep_windows_semantics_on_any_host():
+    """The shape of the path decides, not the OS this happens to run on."""
+    assert str(kernel.canonical(r"C:\Users\me\..\..\Windows\System32\x.dll")) == \
+        r"C:\Windows\System32\x.dll"
+
+
+def test_a_users_path_is_never_rebased_onto_the_server():
+    """The exact production bug: an approved destination must stay on D:."""
+    approved = kernel.guard(Operation(
+        type="move",
+        src=r"D:\Sandbox\Downloads\notes.txt",
+        dst=r"D:\Sandbox\Downloads\Documents\notes.txt",
+    ))
+    assert approved.dst.startswith("D:"), approved.dst
+    assert "render" not in approved.dst.lower()
+    assert "/opt/" not in approved.dst.lower()
+
+
+def test_traversal_is_still_caught_without_a_filesystem():
+    """Normalising lexically must not weaken the blocklist."""
+    with pytest.raises(BlockedPath):
+        kernel.guard(Operation(
+            type="move",
+            src=r"D:\Sandbox\..\..\..\Windows\System32\x.dll",
+            dst=r"D:\Sandbox\x.dll",
+        ))
+
+
+def test_planning_does_not_disambiguate(workspace):
+    """
+    Server-side, whether the destination exists is a question about the wrong
+    disk. The device disambiguates at execution time, where the answer is true,
+    and its executor never overwrites either — one check in two places, not a
+    gap.
+    """
+    taken = workspace / "b.txt"
+    taken.write_text("existing")
+    approved = kernel.guard(
+        Operation(type="move", src=str(workspace / "a.txt"), dst=str(taken)),
+    )
+    assert approved.dst == str(taken), "planning must not invent a (1) suffix"
