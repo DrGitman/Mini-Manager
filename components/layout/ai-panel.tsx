@@ -19,7 +19,7 @@ import {
 } from '@/lib/folder-digests'
 import type { AgentStep, AgentQuestion } from '@/lib/api'
 import { getSession } from '@/lib/session'
-import { streamAgent, type AgentInterrupt } from '@/lib/agent-stream'
+import { streamAgent, resumeAgent, type AgentInterrupt } from '@/lib/agent-stream'
 import { useStrandsAgent } from '@/lib/flags'
 
 const eAPI = typeof window !== 'undefined' ? (window as any).electronAPI : undefined
@@ -104,6 +104,8 @@ interface ChatMessage {
   decision?: 'applied' | 'cancelled'
   /** The agent stopped to ask something. Answered via /agent/v2/resume. */
   interrupt?: AgentInterrupt
+  /** What the user replied, so the buttons stop being offered. */
+  answered?: string
 }
 
 interface Session {
@@ -185,6 +187,78 @@ function describeTool(name: string, input?: unknown): string {
     case 'notify_user':        return 'Asking you about something'
     default:                   return name.replace(/_/g, ' ')
   }
+}
+
+/**
+ * The agent has stopped and is waiting for a decision.
+ *
+ * Rendered from a real interrupt raised inside the agent loop, not from a plan
+ * the model described. The agent is genuinely paused at the tool call — it
+ * resumes from there when answered, rather than starting the goal again.
+ *
+ * The options come from the interrupt itself rather than being hardcoded here,
+ * so the agent decides what it is actually asking.
+ */
+function InterruptPrompt({
+  interrupt, answered, busy, onAnswer,
+}: {
+  interrupt: AgentInterrupt
+  answered?: string
+  busy: boolean
+  onAnswer: (choice: string) => void
+}) {
+  const reason = interrupt.reason ?? {}
+  const files = reason.files ?? []
+  const options = reason.options?.length ? reason.options : ['Apply them', 'Skip them']
+  const isPrivate = files.some(f => (f.sensitivity ?? 'none') !== 'none')
+
+  if (answered) {
+    return (
+      <p className="mt-2 text-xs text-muted-foreground">
+        You said &ldquo;{answered}&rdquo;.
+      </p>
+    )
+  }
+
+  return (
+    <div className={cn(
+      'mt-3 rounded-lg border p-3',
+      isPrivate ? 'border-amber-300 bg-amber-50/60 dark:bg-amber-950/20' : 'border-border bg-muted/40',
+    )}>
+      <p className="text-xs font-medium text-foreground">
+        {reason.question ?? 'I need a decision before I carry on'}
+      </p>
+
+      {files.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {files.map((f, i) => (
+            <li key={i} className="text-xs text-muted-foreground break-all">
+              • {f.name}
+              {f.why ? <span className="text-muted-foreground/70"> — {f.why}</span> : null}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {options.map(option => (
+          <button
+            key={option}
+            onClick={() => onAnswer(option)}
+            disabled={busy}
+            className={cn(
+              'rounded-md px-3 py-1.5 text-xs font-medium transition-opacity disabled:opacity-60',
+              option.toLowerCase().startsWith('apply')
+                ? 'bg-primary text-white hover:opacity-90'
+                : 'border border-border text-muted-foreground hover:bg-accent',
+            )}
+          >
+            {busy ? 'Working…' : option}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 // ─── Pending-change confirmation ──────────────────────────────────────────────
@@ -646,11 +720,12 @@ function UserMessage({ msg }: { msg: ChatMessage }) {
   )
 }
 
-function AssistantMessage({ msg, onRetry, onApply, onCancel, applying }: {
+function AssistantMessage({ msg, onRetry, onApply, onCancel, onAnswerInterrupt, applying }: {
   msg: ChatMessage
   onRetry: (id: string) => void
   onApply: (id: string) => void
   onCancel: (id: string) => void
+  onAnswerInterrupt: (id: string, choice: string) => void
   applying: string | null
 }) {
   const [copied, setCopied] = useState(false)
@@ -678,6 +753,14 @@ function AssistantMessage({ msg, onRetry, onApply, onCancel, applying }: {
         )}
         {msg.steps && msg.steps.length > 0 && (
           <StepTracker steps={msg.steps} />
+        )}
+        {msg.interrupt && (
+          <InterruptPrompt
+            interrupt={msg.interrupt}
+            answered={msg.answered}
+            busy={applying === msg.id}
+            onAnswer={choice => onAnswerInterrupt(msg.id, choice)}
+          />
         )}
         {msg.pending && msg.pending.length > 0 && (
           <PendingChanges
@@ -1177,6 +1260,62 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
     }
   }
 
+  /**
+   * Answer a question the agent stopped to ask, and let it carry on.
+   *
+   * Resuming continues from the paused tool call rather than re-running the
+   * goal, so the reply that follows is the rest of the same turn.
+   */
+  async function handleAnswerInterrupt(msgId: string, choice: string) {
+    const msg = messages.find(m => m.id === msgId)
+    if (!msg?.interrupt) return
+
+    const session = getSession()
+    const sessionId = msg.interrupt.session_id
+      ?? (session ? `${session.email}:${activeId}` : '')
+    if (!sessionId) return
+
+    setApplying(msgId)
+    setMessages(prev => prev.map(m => (m.id === msgId ? { ...m, answered: choice } : m)))
+
+    const continuedId = `ai-r-${Date.now()}`
+    setMessages(prev => [...prev, {
+      id: continuedId, role: 'ai', text: '', ts: Date.now(),
+      status: 'working', steps: [],
+    }])
+
+    const patch = (fn: (m: ChatMessage) => ChatMessage) =>
+      setMessages(prev => prev.map(m => (m.id === continuedId ? fn(m) : m)))
+
+    const context = await refreshAgentContext(false)
+
+    await resumeAgent(
+      {
+        sessionId,
+        interruptId: msg.interrupt.id,
+        response: choice,
+        scanContext: context,
+      },
+      {
+        onText: chunk => patch(m => ({ ...m, text: m.text + chunk })),
+        onTool: tool => patch(m => ({
+          ...m,
+          steps: [...(m.steps ?? []),
+                  { label: describeTool(tool.name, tool.input), status: 'done' }] as AgentStep[],
+        })),
+        onInterrupt: interrupt => patch(m => ({ ...m, status: undefined, interrupt })),
+        onDone: ({ toolsCalled }) => patch(m => ({
+          ...m,
+          // Same rule as a first turn: completion comes from work that ran.
+          status: (toolsCalled ?? []).length > 0 && !m.interrupt ? 'complete' : undefined,
+        })),
+        onError: message => patch(m => ({ ...m, status: 'failed', text: m.text || message })),
+      },
+    )
+
+    setApplying(null)
+  }
+
   function handleCancelPending(msgId: string) {
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, decision: 'cancelled' } : m))
   }
@@ -1259,6 +1398,7 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
               : <AssistantMessage
                   key={msg.id} msg={msg} onRetry={handleRetry}
                   onApply={handleApply} onCancel={handleCancelPending}
+                  onAnswerInterrupt={handleAnswerInterrupt}
                   applying={applying}
                 />
           )}

@@ -12,6 +12,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { timeAgo, formatBytes } from '@/lib/types'
 import { apiGetStats, apiGetInsights, apiGetNotifications } from '@/lib/api'
 import type { DashboardStats, InsightsData, ApiNotification } from '@/lib/api'
+import { RunSummary } from '@/components/layout/run-summary'
 
 const NOTIF_ICON: Record<string, React.ElementType> = {
   scan: ScanLine, apply: CheckCircle, undo: RotateCcw,
@@ -84,6 +85,12 @@ export default function OverviewPage() {
 
   return (
     <div className="grid grid-cols-3 gap-4 items-start">
+      {/* What the agent did while nobody was watching. Sits above everything
+          else because it is the only thing here the user did not ask for. */}
+      <div className="col-span-3">
+        <RunSummary />
+      </div>
+
       {/* ── Stat cards — row 1 ── */}
       <StatCard
         icon={Trash2}
