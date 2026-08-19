@@ -29,7 +29,18 @@ from strands.models.gemini import GeminiModel
 
 from ..config import settings
 from ..middleware.auth import get_current_user
-from ..services.agent_tools import SCAN_CONTEXT_KEY, scan_folder
+from ..services.agent_tools import (
+    PREFS_KEY,
+    SCAN_CONTEXT_KEY,
+    check_rules,
+    check_sensitive,
+    classify_files,
+    find_stale,
+    propose_changes,
+    query_files,
+    recall_corrections,
+    scan_folder,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["agent-v2"])
@@ -54,9 +65,12 @@ class AgentV2Request(BaseModel):
     message: str
     # The digest the desktop app uploaded. Tools read this instead of a disk.
     scan_context: Optional[dict] = None
+    # Confidence thresholds. propose_changes routes on these, so they decide
+    # whether a human gets interrupted — not merely how a list is filtered.
+    preferences: Optional[dict] = None
 
 
-def build_agent(scan_context: Optional[dict]) -> Agent:
+def build_agent(scan_context: Optional[dict], preferences: Optional[dict] = None) -> Agent:
     """
     One agent per request, carrying that request's digest in agent.state.
 
@@ -75,10 +89,16 @@ def build_agent(scan_context: Optional[dict]) -> Agent:
     agent = Agent(
         model=model,
         system_prompt=_SYSTEM,
-        tools=[scan_folder],
+        tools=[
+            # Tier 1 — observe. Read-only.
+            scan_folder, query_files, find_stale, check_rules, recall_corrections,
+            # Tier 2 — reason. Produce plans; mutate nothing.
+            classify_files, check_sensitive, propose_changes,
+        ],
         callback_handler=None,   # we consume events ourselves via stream_async
     )
     agent.state.set(SCAN_CONTEXT_KEY, scan_context or {})
+    agent.state.set(PREFS_KEY, preferences or {})
     return agent
 
 
@@ -86,7 +106,11 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
-async def stream_agent(message: str, scan_context: Optional[dict]) -> AsyncIterator[str]:
+async def stream_agent(
+    message: str,
+    scan_context: Optional[dict],
+    preferences: Optional[dict] = None,
+) -> AsyncIterator[str]:
     """
     Translate Strands events into SSE.
 
@@ -94,7 +118,7 @@ async def stream_agent(message: str, scan_context: Optional[dict]) -> AsyncItera
     they start, and a terminal done/error. The rest of the loop's lifecycle
     events are noise for a chat panel.
     """
-    agent = build_agent(scan_context)
+    agent = build_agent(scan_context, preferences)
     seen_tools: set[str] = set()
 
     try:
@@ -127,7 +151,7 @@ async def agent_v2(
     user: dict = Depends(get_current_user),
 ) -> StreamingResponse:
     return StreamingResponse(
-        stream_agent(body.message, body.scan_context),
+        stream_agent(body.message, body.scan_context, body.preferences),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

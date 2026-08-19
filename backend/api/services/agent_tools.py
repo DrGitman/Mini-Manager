@@ -18,15 +18,41 @@ instructions to a model, not as notes to a maintainer.
 
 from __future__ import annotations
 
+import datetime as _dt
 import logging
 from typing import Any, Optional
 
 from strands import tool
 
+from ..models.schemas import FileItem
+from ..services import gemini as gemini_svc
+from ..services.heuristics import detect_sensitivity
+
 logger = logging.getLogger(__name__)
 
-# Key under which the route stores the uploaded digest for the tools to read.
+# Keys under which the route and the tools pass data to each other.
+#
+# Intermediate results travel through agent.state rather than back through the
+# model. A folder of 247 files would otherwise be retyped by the model into the
+# next tool call — slow, expensive, and a chance to alter data in transit. The
+# model orchestrates; the data stays server-side.
 SCAN_CONTEXT_KEY = "scan_context"
+CLASSIFICATIONS_KEY = "classifications"
+PROPOSAL_KEY = "proposal"
+PREFS_KEY = "preferences"
+
+
+def _state(agent: Any, key: str) -> Any:
+    """Read a value the route or an earlier tool left in agent.state."""
+    if agent is None:
+        return None
+    return agent.state.get(key)
+
+
+def _set_state(agent: Any, key: str, value: Any) -> None:
+    """Hand a result to a later tool without routing it through the model."""
+    if agent is not None:
+        agent.state.set(key, value)
 
 
 def _folders(agent: Any) -> list[dict]:
@@ -137,4 +163,415 @@ def scan_folder(folder_name: str, agent=None) -> dict:
         "sample_newest": match.get("sample_newest") or [],
         "all_files": match.get("all_files"),
         "all_files_truncated": bool(match.get("all_files_truncated")),
+    }
+
+
+# ─── Tier 1 — Observe ─────────────────────────────────────────────────────────
+#
+# Read-only. None of these touch the kernel, because none of them mutate.
+
+@tool
+def query_files(
+    folder_name: str = "",
+    extensions: str = "",
+    name_contains: str = "",
+    min_size_mb: float = 0,
+    agent=None,
+) -> dict:
+    """Count and measure files matching a filter, without listing them all.
+
+    Use this to answer "how many", "how much space", "do I have any" — anything
+    that is a number rather than a list of names. Prefer it over reading a
+    sample list, which is always partial.
+
+    When `exact` comes back false, some folders were too large to search by
+    name. Say so rather than implying the number covers everything.
+
+    Args:
+        folder_name: Which folder to look in. Empty means every watched folder.
+        extensions: Comma-separated types without dots, e.g. "jpg,png". Empty
+            means all types.
+        name_contains: Only count files whose name contains this text.
+        min_size_mb: Only count files at least this many megabytes. 0 for all.
+    """
+    folders = _folders(agent)
+    if not folders:
+        return {"found": False, "reason": "no_folders_watched", "matches": 0}
+
+    if folder_name:
+        match = _match(folders, folder_name)
+        if match is None:
+            return {
+                "found": False, "reason": "folder_not_watched",
+                "requested": folder_name,
+                "available_folders": [f.get("label") for f in folders],
+            }
+        folders = [match]
+
+    wanted = {e.strip().lower().lstrip(".") for e in extensions.split(",") if e.strip()}
+    needle = name_contains.strip().lower()
+    min_bytes = int(min_size_mb * 1024 * 1024)
+
+    # With no name or size filter, the complete by_extension counts answer this
+    # exactly and no file list is needed. That is what the aggregates are for.
+    if not needle and min_bytes == 0:
+        total_files = total_bytes = 0
+        per_folder = {}
+        for f in folders:
+            by_ext = f.get("by_extension") or {}
+            picked = {e: v for e, v in by_ext.items() if not wanted or e in wanted}
+            n = sum(v.get("count", 0) for v in picked.values())
+            b = sum(v.get("bytes", 0) for v in picked.values())
+            total_files += n
+            total_bytes += b
+            per_folder[f.get("label")] = {"files": n, "bytes": b}
+        return {
+            "found": True, "exact": True,
+            "matches": total_files, "total_bytes": total_bytes,
+            "per_folder": per_folder,
+        }
+
+    # Name and size filters need the file list, which the digest only carries
+    # for smaller folders.
+    matches = total_bytes = 0
+    incomplete = []
+    for f in folders:
+        files = f.get("all_files")
+        if files is None:
+            incomplete.append(f.get("label"))
+            continue
+        for item in files:
+            name = (item.get("n") or "").lower()
+            ext = name.rsplit(".", 1)[-1] if "." in name else ""
+            if wanted and ext not in wanted:
+                continue
+            if needle and needle not in name:
+                continue
+            if item.get("s", 0) < min_bytes:
+                continue
+            matches += 1
+            total_bytes += item.get("s", 0)
+
+    return {
+        "found": True,
+        "exact": not incomplete,
+        "matches": matches,
+        "total_bytes": total_bytes,
+        "folders_too_large_to_search": incomplete,
+    }
+
+
+@tool
+def find_stale(folder_name: str = "", days: int = 365, agent=None) -> dict:
+    """Find files nobody has changed in a long time.
+
+    Use this for "what can I get rid of", "what is old", and before suggesting
+    anything be archived.
+
+    This reports when a file was last CHANGED, which is not when it was last
+    opened or downloaded. Say "unchanged since", never "unused".
+
+    Args:
+        folder_name: Which folder to look in. Empty means all watched folders.
+        days: How many days counts as stale. Defaults to a year.
+    """
+    folders = _folders(agent)
+    if not folders:
+        return {"found": False, "reason": "no_folders_watched", "stale_files": 0}
+
+    if folder_name:
+        match = _match(folders, folder_name)
+        if match is None:
+            return {
+                "found": False, "reason": "folder_not_watched",
+                "requested": folder_name,
+                "available_folders": [f.get("label") for f in folders],
+            }
+        folders = [match]
+
+    # The digest carries a complete count at the one-year threshold. Any other
+    # threshold needs the file list, so be explicit about which was used.
+    if days == 365:
+        return {
+            "found": True, "exact": True, "threshold_days": 365,
+            "stale_files": sum(f.get("stale_count", 0) for f in folders),
+            "per_folder": {f.get("label"): f.get("stale_count", 0) for f in folders},
+            "oldest_examples": [
+                s for f in folders for s in (f.get("sample_oldest") or [])
+            ][:10],
+        }
+
+    cutoff = (_dt.date.today() - _dt.timedelta(days=days)).isoformat()
+    total, incomplete, examples = 0, [], []
+    for f in folders:
+        files = f.get("all_files")
+        if files is None:
+            incomplete.append(f.get("label"))
+            continue
+        for item in files:
+            if item.get("m") and item["m"] < cutoff:
+                total += 1
+                if len(examples) < 10:
+                    examples.append(item)
+
+    return {
+        "found": True, "exact": not incomplete, "threshold_days": days,
+        "cutoff_date": cutoff, "stale_files": total,
+        "folders_too_large_to_search": incomplete,
+        "oldest_examples": examples,
+    }
+
+
+@tool
+def check_rules(agent=None) -> dict:
+    """Read the filing rules this user wrote in their own words.
+
+    Call this before proposing where anything should go. A rule the user wrote
+    beats your own judgement — if one applies, follow it and say which one.
+
+    An empty list is normal and means they have not written any yet.
+    """
+    rules = _state(agent, "rules") or []
+    return {
+        "rules": rules,
+        "count": len(rules),
+        "note": "No rules written yet — use your own judgement." if not rules else "",
+    }
+
+
+@tool
+def recall_corrections(agent=None) -> dict:
+    """Read the times this user corrected an earlier suggestion.
+
+    Call this before proposing changes. If someone has already moved a kind of
+    file somewhere once, they expect the same answer next time. Repeating a
+    correction they already made is the fastest way to lose their trust.
+    """
+    hint = _state(agent, "corrections_hint") or ""
+    return {
+        "corrections": hint,
+        "has_history": bool(hint),
+        "note": "No corrections recorded yet." if not hint else "",
+    }
+
+
+# ─── Tier 2 — Reason ──────────────────────────────────────────────────────────
+#
+# Produce plans and judgements. Still nothing mutates.
+#
+# These pass their results through agent.state rather than back through the
+# model. A folder of 247 files would otherwise be retyped by the model into the
+# next tool call — slow, expensive, and a chance to alter data in transit. The
+# model orchestrates; the data stays server-side.
+
+@tool
+async def classify_files(folder_name: str = "", limit: int = 60, agent=None) -> dict:
+    """Work out what each file is and where it should go.
+
+    Call this after scan_folder when the user wants files organised, sorted or
+    tidied. It returns a summary rather than every file, because the detail is
+    kept for propose_changes to use.
+
+    Every classification carries a confidence score. Do not present low-scoring
+    suggestions as settled — propose_changes decides what needs a human.
+
+    Args:
+        folder_name: Which folder to classify. Empty means the first watched one.
+        limit: How many files to classify at most. Keep this modest; the user
+            reviews the result.
+    """
+    folders = _folders(agent)
+    if not folders:
+        return {"ok": False, "reason": "no_folders_watched"}
+
+    match = _match(folders, folder_name) if folder_name else folders[0]
+    if match is None:
+        return {
+            "ok": False, "reason": "folder_not_watched",
+            "requested": folder_name,
+            "available_folders": [f.get("label") for f in folders],
+        }
+
+    listing = match.get("all_files")
+    if not listing:
+        return {
+            "ok": False,
+            "reason": "no_file_list",
+            "folder": match.get("label"),
+            "total_files": match.get("total_files", 0),
+            "message": (
+                "That folder holds too many files for the desktop app to have sent "
+                "the full list. Say so and suggest organising a smaller folder."
+            ),
+        }
+
+    items = [
+        FileItem(
+            id=str(i),
+            name=f.get("n", ""),
+            extension=("." + f["n"].rsplit(".", 1)[-1]) if "." in f.get("n", "") else "",
+            size=f.get("s", 0),
+            relative_path=f.get("p", ""),
+        )
+        for i, f in enumerate(listing[:limit])
+    ]
+    if not items:
+        return {"ok": False, "reason": "no_files", "folder": match.get("label")}
+
+    results, _usage = await gemini_svc.classify_batch(items, user_id=None, endpoint="/agent/v2")
+
+    by_id = {i.id: i for i in items}
+    detail = []
+    for r in results:
+        src = by_id.get(r.id)
+        if src is None:
+            continue
+        detail.append({
+            "name": src.name,
+            "path": src.relative_path,
+            "category": r.category,
+            "new_name": r.new_name,
+            "target_folder": r.target_folder,
+            "confidence": r.confidence,
+            "reason": r.reason,
+            "sensitivity": r.sensitivity,
+        })
+
+    # Kept for propose_changes; deliberately not returned through the model.
+    _set_state(agent, CLASSIFICATIONS_KEY, {"folder": match.get("label"), "files": detail})
+
+    categories: dict[str, int] = {}
+    for d in detail:
+        categories[d["category"]] = categories.get(d["category"], 0) + 1
+
+    return {
+        "ok": True,
+        "folder": match.get("label"),
+        "classified": len(detail),
+        "categories": categories,
+        "average_confidence": round(sum(d["confidence"] for d in detail) / len(detail), 2) if detail else 0,
+        "note": "Detail is held for propose_changes. Do not list every file back to the user.",
+    }
+
+
+@tool
+def check_sensitive(agent=None) -> dict:
+    """Flag anything private among the files just classified.
+
+    Call this after classify_files and before proposing anything. Passports,
+    bank statements and ID scans must never be moved on someone's behalf
+    without asking, however confident the classification was.
+
+    Returns the count and the categories found, not the filenames — do not read
+    a list of someone's private documents back to them unless they ask.
+    """
+    data = _state(agent, CLASSIFICATIONS_KEY) or {}
+    files = data.get("files") or []
+    if not files:
+        return {
+            "ok": False,
+            "reason": "nothing_classified_yet",
+            "message": "Call classify_files first.",
+        }
+
+    flagged = []
+    for f in files:
+        # The classifier's own judgement, plus a filename check that does not
+        # depend on the model having noticed.
+        level = f.get("sensitivity", "none")
+        heuristic = detect_sensitivity(f.get("name", ""))
+        if heuristic != "none":
+            level = heuristic
+        if level != "none":
+            f["sensitivity"] = level
+            flagged.append({"name": f.get("name"), "kind": level})
+
+    _set_state(agent, CLASSIFICATIONS_KEY, data)
+
+    kinds: dict[str, int] = {}
+    for f in flagged:
+        kinds[f["kind"]] = kinds.get(f["kind"], 0) + 1
+
+    return {
+        "ok": True,
+        "checked": len(files),
+        "sensitive_files": len(flagged),
+        "kinds": kinds,
+        "note": (
+            "These must be escalated to the user, never applied automatically."
+            if flagged else "Nothing private found."
+        ),
+    }
+
+
+@tool
+def propose_changes(agent=None) -> dict:
+    """Decide which changes can be made automatically and which need the user.
+
+    Call this last, after classify_files and check_sensitive. It sorts every
+    proposed change into one of three outcomes using the user's own thresholds:
+
+      auto     — confident enough, and nothing private. Safe to apply.
+      review   — plausible but worth a glance before applying.
+      escalate — too uncertain, or the file is private. Needs a decision.
+
+    Report the counts to the user and say plainly what you would apply and what
+    you want them to look at. Nothing is applied here; this only decides.
+    """
+    data = _state(agent, CLASSIFICATIONS_KEY) or {}
+    files = data.get("files") or []
+    if not files:
+        return {
+            "ok": False,
+            "reason": "nothing_classified_yet",
+            "message": "Call classify_files first.",
+        }
+
+    prefs = _state(agent, PREFS_KEY) or {}
+    auto_at = float(prefs.get("auto_threshold", 0.85))
+    review_at = float(prefs.get("review_threshold", 0.70))
+
+    buckets = {"auto": [], "review": [], "escalate": []}
+    for f in files:
+        confidence = float(f.get("confidence", 0))
+        sensitive = f.get("sensitivity", "none") != "none"
+
+        if sensitive:
+            # Confidence is irrelevant here. A correct guess about someone's
+            # passport is still a decision that belongs to them.
+            disposition = "escalate"
+            why = f"private ({f.get('sensitivity')})"
+        elif confidence >= auto_at:
+            disposition = "auto"
+            why = f"confident ({confidence:.2f})"
+        elif confidence >= review_at:
+            disposition = "review"
+            why = f"fairly confident ({confidence:.2f})"
+        else:
+            disposition = "escalate"
+            why = f"not confident ({confidence:.2f})"
+
+        f["disposition"] = disposition
+        f["why"] = why
+        buckets[disposition].append(f)
+
+    data["files"] = files
+    data["thresholds"] = {"auto_at": auto_at, "review_at": review_at}
+    _set_state(agent, PROPOSAL_KEY, data)
+
+    return {
+        "ok": True,
+        "folder": data.get("folder"),
+        "total": len(files),
+        "auto": len(buckets["auto"]),
+        "review": len(buckets["review"]),
+        "escalate": len(buckets["escalate"]),
+        "thresholds": {"auto_at": auto_at, "review_at": review_at},
+        "escalation_reasons": [f["why"] for f in buckets["escalate"]][:10],
+        "examples": {
+            k: [{"name": f["name"], "to": f["target_folder"], "why": f["why"]}
+                for f in v[:3]]
+            for k, v in buckets.items() if v
+        },
+        "note": "Nothing has been changed. This is a decision, not an action.",
     }

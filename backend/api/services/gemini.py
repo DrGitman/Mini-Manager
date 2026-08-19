@@ -75,14 +75,18 @@ async def check_budget(user_id: str, estimated_tokens: int) -> None:
 
 
 async def _deduct_tokens(user_id: Optional[str], tokens: int) -> None:
+    """Accounting only — like _log_tokens, never fails the work it measured."""
     if not user_id:
         return
-    pool = get_pool()
-    await pool.execute(
-        "UPDATE users SET tokens_used_this_month = tokens_used_this_month + $1 WHERE id = $2",
-        tokens,
-        user_id,
-    )
+    try:
+        pool = get_pool()
+        await pool.execute(
+            "UPDATE users SET tokens_used_this_month = tokens_used_this_month + $1 WHERE id = $2",
+            tokens,
+            user_id,
+        )
+    except Exception as exc:                       # noqa: BLE001 - accounting only
+        logger.warning("Could not deduct tokens: %s", exc)
 
 
 async def _log_tokens(
@@ -90,7 +94,32 @@ async def _log_tokens(
     endpoint: str,
     usage: TokenUsage,
 ) -> None:
-    pool = get_pool()
+    """
+    Record token usage. Never let this failing break the work it measured.
+
+    Usage logging is telemetry — if the database is unreachable, or there is no
+    user to attribute it to (an agent tool calling the classifier directly),
+    the classification is still perfectly good and must be returned. Losing a
+    row of accounting is not a reason to fail someone's scan.
+    """
+    try:
+        pool = get_pool()
+    except RuntimeError:
+        logger.debug("No database pool — skipping token log for %s", endpoint)
+        return
+
+    try:
+        await _write_token_log(pool, user_id, endpoint, usage)
+    except Exception as exc:                       # noqa: BLE001 - telemetry only
+        logger.warning("Could not record token usage for %s: %s", endpoint, exc)
+
+
+async def _write_token_log(
+    pool,
+    user_id: Optional[str],
+    endpoint: str,
+    usage: TokenUsage,
+) -> None:
     await pool.execute(
         """
         INSERT INTO token_log (user_id, endpoint, model, tokens_in, tokens_out, cost_usd)
