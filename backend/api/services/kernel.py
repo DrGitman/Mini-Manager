@@ -147,6 +147,25 @@ def canonical(path: str | pathlib.Path) -> pathlib.Path:
     return pathlib.PureWindowsPath(normalised) if looks_windows else pathlib.PurePosixPath(normalised)
 
 
+def join(base: str | pathlib.PurePath, *parts: str) -> pathlib.PurePath:
+    """
+    Build a path in the flavour of the path you started from.
+
+    pathlib.Path follows the OS it runs on, so on Linux a Windows path is one
+    long filename with no separators — its .parent is "." and joining onto it
+    silently produces a relative path. That is how an approved destination came
+    back as a bare relative path instead of one on the user's own drive.
+
+    Every path the kernel handles belongs to the user's machine, not this one,
+    so the flavour must come from the path itself.
+    """
+    root = canonical(base)
+    for part in parts:
+        if part:
+            root = root / part
+    return root
+
+
 def is_protected(path: pathlib.Path, extra: Optional[Iterable[str]] = None) -> bool:
     """
     True if this path must never be touched.

@@ -614,7 +614,9 @@ def _plan_from(files: list[dict], scan_root: str = "") -> tuple[list[dict], list
             refused.append({"name": f.get("name"), "reason": "incomplete proposal"})
             continue
 
-        dst = str(pathlib.Path(src).parent / target / new_name)
+        # kernel.join keeps the user's path flavour. pathlib.Path here would
+        # follow the server's OS and quietly produce a relative path.
+        dst = str(kernel.join(kernel.canonical(src).parent, target, new_name))
 
         try:
             op = kernel.guard(
