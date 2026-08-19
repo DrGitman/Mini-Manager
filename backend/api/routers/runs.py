@@ -100,6 +100,12 @@ class RunRequest(BaseModel):
     trigger: str = "scheduled"
 
 
+class ResolveRequest(BaseModel):
+    """A decision on something the agent stopped over."""
+    choice: str
+    note: str = ""
+
+
 class RunResponse(BaseModel):
     run_id: str
     summary: str
@@ -263,3 +269,47 @@ async def list_escalations(user: dict = Depends(get_current_user)) -> list[dict]
         }
         for r in rows
     ]
+
+
+@router.post("/escalations/{escalation_id}/resolve")
+async def resolve_escalation(
+    escalation_id: str,
+    body: ResolveRequest,
+    user: dict = Depends(get_current_user),
+) -> dict:
+    """
+    Record the user's decision on an escalation.
+
+    Scoped by user_id as well as id: an escalation names files in someone's
+    folders, so resolving one must never be possible from another account.
+
+    The decision is stored rather than merely clearing the flag, because it is
+    the raw material for not asking the same question twice — a correction the
+    agent can learn from later.
+    """
+    pool = get_pool()
+    updated = await pool.fetchrow(
+        """
+        UPDATE escalations
+        SET status = 'resolved',
+            resolution = $1::jsonb,
+            resolved_at = NOW()
+        WHERE id = $2 AND user_id = $3 AND status = 'open'
+        RETURNING id, run_id, reason
+        """,
+        json.dumps({"choice": body.choice, "note": body.note}),
+        escalation_id,
+        user["sub"],
+    )
+
+    if updated is None:
+        # Already answered, or not this user's to answer. Same response either
+        # way — whether an id exists is not something to leak.
+        return {"resolved": False, "reason": "not_open"}
+
+    remaining = await pool.fetchval(
+        "SELECT COUNT(*) FROM escalations WHERE user_id = $1 AND status = 'open'",
+        user["sub"],
+    )
+    logger.info("escalation %s resolved as %r", escalation_id, body.choice)
+    return {"resolved": True, "remaining_open": remaining}

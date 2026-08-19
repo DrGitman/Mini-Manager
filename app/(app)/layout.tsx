@@ -8,6 +8,7 @@ import { AiPanel } from '@/components/layout/ai-panel'
 import { PageTransition } from '@/components/layout/page-transition'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getSession, useSession, updateUser } from '@/lib/session'
+import { startScheduler } from '@/lib/scheduler'
 import { PreferencesProvider } from '@/lib/preferences-context'
 import { apiGetNotifications, apiGetProfile } from '@/lib/api'
 import type { DemoUser } from '@/lib/types'
@@ -19,6 +20,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [checking, setChecking] = useState(true)
   const [aiOpen, setAiOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
+
+  // The autonomous scheduler. Asks the server whether a run is owed, on launch
+  // and periodically — launch being what catches a machine that was switched
+  // off. Desktop only: the server cannot read the user's disk, so only the
+  // device can supply the folder digests a run needs.
+  useEffect(() => {
+    if (!getSession()) return
+    return startScheduler()
+  }, [user?.email])
 
   useEffect(() => {
     if (!getSession()) {
