@@ -10,17 +10,20 @@
 /**
  * Route the assistant panel through the Strands agent on /agent/v2.
  *
- * Off by default. Turn it on with NEXT_PUBLIC_AGENT_V2=1, or from the browser
- * console with localStorage.setItem('mm.flag.agentV2', '1') — which is how to
- * demo it without a rebuild, since NEXT_PUBLIC_* values are baked in at build
- * time.
+ * **On by default.** The Strands agent is the product now — it streams its tool
+ * calls, escalates rather than guessing, and is what the app is for. Requiring
+ * anyone to open a console to see that would be absurd.
+ *
+ * The escape hatch runs the other way: set NEXT_PUBLIC_AGENT_V2=0, or
+ * localStorage.setItem('mm.flag.agentV2', '0'), to fall back to the older
+ * single-shot route while the two paths still coexist.
  */
 export function useStrandsAgent(): boolean {
-  if (process.env.NEXT_PUBLIC_AGENT_V2 === '1') return true
-  if (typeof window === 'undefined') return false
+  if (process.env.NEXT_PUBLIC_AGENT_V2 === '0') return false
+  if (typeof window === 'undefined') return true
   try {
-    return localStorage.getItem('mm.flag.agentV2') === '1'
+    return localStorage.getItem('mm.flag.agentV2') !== '0'
   } catch {
-    return false
+    return true
   }
 }

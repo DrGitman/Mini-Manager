@@ -66,6 +66,30 @@ class RunRecorder:
                     json.dumps(result.tool_calls), result.status,
                 )
 
+                # An autonomous run IS a scan. Recording one keeps a single
+                # source of truth for "did anything happen": without this the
+                # summary card says it tidied Downloads while Recent Scans says
+                # "no scans yet", and the two halves of the app disagree in
+                # front of the user.
+                for folder in result.folders:
+                    await conn.execute(
+                        """
+                        INSERT INTO scans (user_id, folder_path, file_count, proposals)
+                        VALUES ($1, $2, $3, $4::jsonb)
+                        """,
+                        result.user_id,
+                        folder,
+                        result.files_seen,
+                        json.dumps([
+                            {
+                                "name": op.get("name"),
+                                "targetFolder": op.get("destination"),
+                                "source": "agent",
+                            }
+                            for op in result.operations
+                        ]),
+                    )
+
                 for esc in result.escalations:
                     await conn.execute(
                         """
@@ -172,22 +196,11 @@ async def start_run(
         recorder=RunRecorder(),
     )
 
-    # The notification carries the agent's own words, not a count. "3 files
-    # need your review" is a form field; "I left your passport scan alone — it
-    # looks like an identity document" is the agent explaining itself, and that
-    # is the thing worth being interrupted by.
-    if result.escalation_count:
-        first_note = next(
-            (e.get("agent_note") for e in result.escalations if e.get("agent_note")),
-            "",
-        )
-        await create_notification(
-            user_id=user["sub"],
-            kind="agent",
-            title=first_note or f"{result.escalation_count} file(s) need your decision",
-            body=result.summary,
-        )
-    elif result.files_applied:
+    # The bell reports what HAPPENED; the decisions screen holds what is
+    # BLOCKED ON THE USER. An escalation is the second, so it deliberately does
+    # not create a notification row — otherwise one event is announced twice, in
+    # two places, both linking to the same thing.
+    if result.files_applied and not result.escalation_count:
         await create_notification(
             user_id=user["sub"],
             kind="agent",

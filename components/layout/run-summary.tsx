@@ -116,7 +116,7 @@ export function RunSummary() {
 
           {openEscalations > 0 && (
             <Link
-              href="/notifications"
+              href="/decisions"
               className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-amber-600 hover:underline"
             >
               Review {openEscalations} decision{openEscalations === 1 ? '' : 's'}

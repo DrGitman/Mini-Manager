@@ -10,6 +10,7 @@ import {
   BarChart2,
   FileSearch,
   History,
+  ShieldQuestion,
   ShieldCheck,
   LogOut,
   FolderOpen,
@@ -38,6 +39,8 @@ export function Sidebar({ user }: SidebarProps) {
     { label: 'Insights',   href: '/insights',    icon: BarChart2       },
     { label: 'Documents',  href: '/documents',   icon: FileSearch      },
     { label: 'History',    href: '/history',     icon: History         },
+    // Where the assistant waits when it would rather not guess.
+    { label: 'Decisions',  href: '/decisions',   icon: ShieldQuestion  },
   ]
 
   function handleSignOut() {

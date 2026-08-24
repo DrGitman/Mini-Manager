@@ -27,6 +27,7 @@ const titles: Record<string, string> = {
   '/explain':      'Documents',
   '/history':      'History',
   '/notifications':'Notifications',
+  '/decisions':   'Waiting on you',
   '/settings':     'Settings',
   '/profile':      'Profile',
   '/agent':        'Agent',
@@ -216,7 +217,7 @@ export function TopBar({ unreadCount, user, aiOpen, onAiToggle }: TopBarProps) {
             blocked on the user. The tooltip carries the agent's own sentence. */}
         {escalations.length > 0 && (
           <Link
-            href="/notifications"
+            href="/decisions"
             title={escalations[0]?.agent_note || 'The assistant needs a decision'}
             className="relative flex size-8 items-center justify-center rounded-lg text-amber-600 transition-colors hover:bg-amber-50 dark:hover:bg-amber-950/30"
           >
