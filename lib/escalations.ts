@@ -71,18 +71,27 @@ export async function fetchEscalations(): Promise<Escalation[]> {
   const raw = await res.json()
   return (Array.isArray(raw) ? raw : []).map((e: any) => ({
     ...e,
-    // file_refs comes back as JSONB, which arrives as a string over the wire.
-    files: typeof e.files === 'string' ? safeParse(e.files) : (e.files ?? []),
+    // Both of these are JSONB columns, and asyncpg hands JSONB back as text —
+    // so they arrive as strings, not arrays. Parsing one and not the other is
+    // how the decisions screen crashed on options.map: the shape looked right
+    // until something iterated it.
+    files: asArray<EscalationFile>(e.files),
+    options: asArray<string>(e.options),
   }))
 }
 
-function safeParse(value: string): EscalationFile[] {
-  try {
-    const parsed = JSON.parse(value)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
+/** A JSONB column as an array, whether it arrived parsed or as text. */
+function asArray<T>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[]
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return Array.isArray(parsed) ? (parsed as T[]) : []
+    } catch {
+      return []
+    }
   }
+  return []
 }
 
 /**
