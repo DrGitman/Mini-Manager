@@ -12,6 +12,9 @@ import {
   apiGetNotifications, apiToggleRead, apiMarkAllRead, apiDeleteNotification,
 } from '@/lib/api'
 import type { ApiNotification } from '@/lib/api'
+import { fetchEscalations, type Escalation } from '@/lib/escalations'
+import { ShieldQuestion } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -103,18 +106,130 @@ function EmptyState() {
   )
 }
 
+
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? ''
+
+function token(): string | null {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem('mm.token') ?? sessionStorage.getItem('mm.token')
+}
+
+/**
+ * An escalation, rendered as a notification that happens to need an answer.
+ *
+ * Deliberately the same row shape as everything else on this screen — this is
+ * not a different kind of thing, it is an Agent notification where the agent is
+ * waiting rather than reporting. The only difference is the buttons.
+ *
+ * Three answers, because "not now" is a real one. With only yes or no, people
+ * pick one they do not mean just to clear the badge.
+ */
+function EscalationItem({
+  escalation, onAnswered, onError,
+}: {
+  escalation: Escalation
+  onAnswered: (id: string) => void
+  onError: (message: string) => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const files = escalation.files ?? []
+
+  async function answer(choice: string) {
+    setBusy(true)
+    try {
+      const res = await fetch(`${BASE}/api/v1/escalations/${escalation.id}/resolve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body: JSON.stringify({ choice }),
+      })
+      if (!res.ok) throw new Error(String(res.status))
+      const data = await res.json()
+      // Removed only once the server confirms — dropping it optimistically
+      // would hide a decision that was never recorded.
+      if (data.resolved) onAnswered(escalation.id)
+      else onError('That one was already answered.')
+    } catch {
+      onError('Could not save that. It is still waiting for you.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="group flex items-start gap-4 rounded-lg border border-amber-200 bg-amber-50/40 p-4 dark:border-amber-900/40 dark:bg-amber-950/10">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
+        <ShieldQuestion className="h-4 w-4 text-amber-600" />
+      </div>
+
+      <div className="min-w-0 flex-1">
+        {/* The agent's own sentence, not a category. */}
+        <p className="text-sm leading-[1.55] text-foreground">
+          {escalation.agent_note || 'I stopped and would rather you decided.'}
+        </p>
+
+        {files.length > 0 && (
+          <ul className="mt-1.5 space-y-0.5">
+            {files.map((f, i) => (
+              <li key={i} className="truncate text-xs font-mono text-muted-foreground">
+                {f.file}
+                {f.folder ? <span className="text-muted-foreground/60"> · {f.folder}</span> : null}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {['Apply it', 'Leave it', 'Ask me later'].map((choice, i) => (
+            <button
+              key={choice}
+              onClick={() => answer(choice)}
+              disabled={busy}
+              className={
+                'rounded-md px-2.5 py-1.5 text-xs font-medium transition-opacity disabled:opacity-60 ' +
+                (i === 0
+                  ? 'bg-primary text-white hover:opacity-90'
+                  : 'border border-border bg-background text-muted-foreground hover:bg-accent')
+              }
+            >
+              {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : choice}
+            </button>
+          ))}
+          <span className="ml-auto text-xs text-muted-foreground">
+            {timeAgo(new Date(escalation.created_at).getTime())}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<ApiNotification[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<TabValue>('all')
+  const [escalations, setEscalations] = useState<Escalation[]>([])
+
+  // "Review N decisions" links here with ?tab=agent, so it lands on the list
+  // that holds them rather than making the user find it.
+  const params = useSearchParams()
+  const initialTab = (params.get('tab') as TabValue) || 'all'
+  const [activeTab, setActiveTab] = useState<TabValue>(
+    ['all', 'unread', 'scans', 'agent'].includes(initialTab) ? initialTab : 'all',
+  )
 
   useEffect(() => {
-    apiGetNotifications()
-      .then(res => setNotifications(res.notifications))
-      .catch(e => setError(e.message))
+    // Both together: an escalation is an Agent notification that happens to
+    // need an answer, so this screen is where it belongs.
+    Promise.all([
+      apiGetNotifications().then(res => res.notifications).catch(e => { setError(e.message); return [] }),
+      fetchEscalations().catch(() => []),
+    ])
+      .then(([notifs, escs]) => {
+        setNotifications(notifs)
+        setEscalations(escs)
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -138,8 +253,17 @@ export default function NotificationsPage() {
     })
   }
 
-  const unreadCount = notifications.filter(n => !n.read).length
+  // An unanswered escalation is unread by definition — it is the thing most
+  // actually waiting on the user, so it counts.
+  const unreadCount = notifications.filter(n => !n.read).length + escalations.length
+
   const filtered = filterNotifications(notifications, activeTab)
+  // Escalations belong in All, Unread and Agent; Scans is about scanning.
+  const shownEscalations = activeTab === 'scans' ? [] : escalations
+
+  function handleAnswered(id: string) {
+    setEscalations(prev => prev.filter(e => e.id !== id))
+  }
 
   return (
     <div className="flex flex-col gap-6 max-w-2xl mx-auto">
@@ -180,10 +304,20 @@ export default function NotificationsPage() {
               </div>
             ) : error ? (
               <p className="text-sm text-destructive py-8 text-center">{error}</p>
-            ) : filtered.length === 0 ? (
+            ) : (filtered.length === 0 && (tab === 'scans' ? true : escalations.length === 0)) ? (
               <EmptyState />
             ) : (
               <div className="flex flex-col gap-2">
+                {/* Things waiting on the user come first. They are the only
+                    rows here that block anything. */}
+                {(tab === 'scans' ? [] : escalations).map(e => (
+                  <EscalationItem
+                    key={e.id}
+                    escalation={e}
+                    onAnswered={handleAnswered}
+                    onError={setError}
+                  />
+                ))}
                 {filtered.map(n => (
                   <NotificationItem
                     key={n.id}

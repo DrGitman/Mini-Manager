@@ -193,49 +193,6 @@ export default function OverviewPage() {
       {/* ── Right rail — rows 2+ ── */}
       <div className="space-y-4">
 
-        {/* AI Proposals summary */}
-        <Card className="bg-card shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold">AI Proposals</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {loading ? (
-              <div className="space-y-2">
-                {[1,2,3].map(i => <div key={i} className="h-5 animate-pulse rounded bg-muted" />)}
-              </div>
-            ) : (proposals.auto + proposals.review + proposals.manual) === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No proposals yet.{' '}
-                <Link href="/organize" className="text-primary hover:underline">Scan a folder</Link> to generate them.
-              </p>
-            ) : (
-              <>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Auto-apply (&ge;0.85)</span>
-                  <Badge className="bg-green-100 text-green-700 border-0 hover:bg-green-100">
-                    {proposals.auto} files
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Review (0.70-0.85)</span>
-                  <Badge className="bg-yellow-100 text-yellow-700 border-0 hover:bg-yellow-100">
-                    {proposals.review} files
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Needs input (&lt;0.70)</span>
-                  <Badge className="bg-red-100 text-red-700 border-0 hover:bg-red-100">
-                    {proposals.manual} files
-                  </Badge>
-                </div>
-                <Link href="/organize" className="mt-1 text-sm text-primary hover:underline">
-                  Review proposals
-                </Link>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
         {/* Recent Alerts */}
         <Card className="bg-card shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-3">

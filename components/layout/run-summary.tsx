@@ -21,6 +21,26 @@ import { timeAgo } from '@/lib/types'
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? ''
 const DISMISSED_KEY = 'mm.run.dismissed'
 
+/**
+ * Dismissal is per user AND per run.
+ *
+ * Keyed on the run alone, a second account on the same machine inherits the
+ * first one's dismissals — so someone signs in and never sees that the agent
+ * did anything, which is the one thing this card exists to prevent.
+ */
+function dismissKeyFor(email: string | undefined): string {
+  return email ? `${DISMISSED_KEY}.${email}` : DISMISSED_KEY
+}
+
+function currentEmail(): string | undefined {
+  try {
+    const raw = localStorage.getItem('mm.session') ?? sessionStorage.getItem('mm.session')
+    return raw ? JSON.parse(raw).email : undefined
+  } catch {
+    return undefined
+  }
+}
+
 interface LatestRun {
   id: string
   trigger: string
@@ -59,7 +79,7 @@ export function RunSummary() {
         // Dismissal is per run, not global — the next run has something new to
         // say, and hiding it because the last one was dismissed would make
         // autonomy invisible.
-        const seen = localStorage.getItem(DISMISSED_KEY)
+        const seen = localStorage.getItem(dismissKeyFor(currentEmail()))
         setRun(data.run)
         setOpenEscalations(data.open_escalations ?? 0)
         setDismissed(seen === data.run.id)
@@ -74,7 +94,7 @@ export function RunSummary() {
   if (!run || dismissed || !run.summary?.trim()) return null
 
   function dismiss() {
-    try { localStorage.setItem(DISMISSED_KEY, run!.id) } catch {}
+    try { localStorage.setItem(dismissKeyFor(currentEmail()), run!.id) } catch {}
     setDismissed(true)
   }
 
@@ -116,7 +136,7 @@ export function RunSummary() {
 
           {openEscalations > 0 && (
             <Link
-              href="/decisions"
+              href="/notifications?tab=agent"
               className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-amber-600 hover:underline"
             >
               Review {openEscalations} decision{openEscalations === 1 ? '' : 's'}

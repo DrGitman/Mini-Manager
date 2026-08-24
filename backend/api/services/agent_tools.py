@@ -538,7 +538,23 @@ def propose_changes(agent=None) -> dict:
     buckets = {"auto": [], "review": [], "escalate": []}
     for f in files:
         confidence = float(f.get("confidence", 0))
-        sensitive = f.get("sensitivity", "none") != "none"
+
+        # Sensitivity is re-derived here rather than trusted.
+        #
+        # It used to read whatever check_sensitive had recorded — which meant
+        # the guarantee "private files always go to a human" depended on the
+        # model choosing to call that tool. When it skipped it, a passport scan
+        # was classified confidently and auto-applied. Observed, not theorised.
+        #
+        # Same principle as the kernel: a protection that only holds when an
+        # earlier step remembers to run is not a protection. The recorded value
+        # is still honoured when it is stricter, since check_sensitive can see
+        # things a filename alone cannot.
+        recorded = f.get("sensitivity", "none")
+        detected = detect_sensitivity(f.get("name", "") or "")
+        sensitivity = recorded if recorded != "none" else detected
+        f["sensitivity"] = sensitivity
+        sensitive = sensitivity != "none"
 
         if sensitive:
             # Confidence is irrelevant here. A correct guess about someone's

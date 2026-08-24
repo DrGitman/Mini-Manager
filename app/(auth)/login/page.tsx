@@ -61,7 +61,7 @@ export default function LoginPage() {
         data.token,
         true,
       )
-      router.push('/organize')
+      router.push('/overview')
     })
     return () => eAPI.removeGoogleAuthListener()
   }, [])
@@ -106,7 +106,7 @@ export default function LoginPage() {
         res.access_token,
         rememberMe,
       )
-      router.push('/organize')
+      router.push('/overview')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Something went wrong.'
       setErrors({ form: msg })

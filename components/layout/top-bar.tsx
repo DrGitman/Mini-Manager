@@ -27,7 +27,6 @@ const titles: Record<string, string> = {
   '/explain':      'Documents',
   '/history':      'History',
   '/notifications':'Notifications',
-  '/decisions':   'Waiting on you',
   '/settings':     'Settings',
   '/profile':      'Profile',
   '/agent':        'Agent',
@@ -64,6 +63,11 @@ export function TopBar({ unreadCount, user, aiOpen, onAiToggle }: TopBarProps) {
   const title = getTitle(pathname)
   const [recents, setRecents] = useState<string[]>([])
   const [escalations, setEscalations] = useState<Escalation[]>([])
+
+  // One badge, one count. An unanswered escalation is the thing most actually
+  // waiting on the user, so it belongs in the same number rather than getting
+  // a second icon that says the same thing in a different colour.
+  const totalWaiting = unreadCount + escalations.length
 
   // Anything the agent stopped to ask about, including from a run that happened
   // while the app was closed. Polled rather than pushed: there is no socket, and
@@ -211,32 +215,16 @@ export function TopBar({ unreadCount, user, aiOpen, onAiToggle }: TopBarProps) {
           <Sparkles className="size-4" />
         </button>
 
-        {/* Escalations — the agent waiting on a decision.
-            Amber rather than the usual primary, and shown ahead of ordinary
-            notifications, because this is the one thing that is actually
-            blocked on the user. The tooltip carries the agent's own sentence. */}
-        {escalations.length > 0 && (
-          <Link
-            href="/decisions"
-            title={escalations[0]?.agent_note || 'The assistant needs a decision'}
-            className="relative flex size-8 items-center justify-center rounded-lg text-amber-600 transition-colors hover:bg-amber-50 dark:hover:bg-amber-950/30"
-          >
-            <ShieldQuestion className="size-4" />
-            <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-white">
-              {escalations.length > 9 ? '9+' : escalations.length}
-            </span>
-          </Link>
-        )}
-
         {/* Notifications */}
         <Link
-          href="/notifications"
+          href={escalations.length > 0 ? '/notifications?tab=agent' : '/notifications'}
+          title={escalations[0]?.agent_note || undefined}
           className="relative flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           <Bell className="size-4" />
-          {unreadCount > 0 && (
+          {totalWaiting > 0 && (
             <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-white">
-              {unreadCount > 9 ? '9+' : unreadCount}
+              {totalWaiting > 9 ? '9+' : totalWaiting}
             </span>
           )}
         </Link>
