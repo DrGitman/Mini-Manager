@@ -85,8 +85,9 @@ graph TB
         EXEC --> FS
     end
 
-    subgraph Model["Model provider"]
-        GEM["Google Gemini"]
+    subgraph Model["Model providers"]
+        GEM["Google Gemini<br/><i>reasoning · tool choice</i>"]
+        GROQ["Groq<br/><i>bulk classification</i>"]
     end
 
     subgraph Store["Neon Postgres · S3"]
@@ -97,6 +98,7 @@ graph TB
     SCAN -.->|"digest<br/>(metadata only)"| AGENT
     KERNEL -.->|"validated plan"| EXEC
     AGENT <--> GEM
+    TOOLS <--> GROQ
     AGENT --> DB
     KERNEL --> DB
     AGENT -.-> S3
@@ -192,6 +194,12 @@ four-file proposal from S3, answers the interrupt, and continues from the paused
 
 A misconfigured S3 backend is a **startup failure**, not a fallback to local files. Falling
 back would pass every test and fail only in production, months later, invisibly.
+
+**Two models, two jobs.** Gemini does the agent's reasoning — which tool to call, whether
+to escalate, and the sentence it writes about a passport scan. Groq does the bulk
+classification underneath `classify_files`: hundreds of files per run, chunked by
+serialised size with backoff on rate limits, where throughput matters more than reasoning
+depth. The agent never sees that split; it calls one tool.
 
 ### Amazon Bedrock and AgentCore — evaluated, not adopted
 
@@ -341,8 +349,10 @@ Developer Mode enabled, or an administrator terminal.
 |---|---|---|
 | `DATABASE_URL` | PostgreSQL connection string | Yes |
 | `JWT_SECRET` | Signs login tokens | Yes |
-| `GEMINI_API_KEY` | The agent's model | Yes |
+| `GEMINI_API_KEY` | The agent's reasoning | Yes |
+| `GROQ_API_KEY` | Bulk file classification | Yes |
 | `GEMINI_MODEL` | Defaults to `gemini-flash-lite-latest` | No |
+| `GROQ_MODEL` | Defaults to `openai/gpt-oss-120b` | No |
 | `SESSION_BACKEND` | `file` or `s3` — **must be `s3` in production** | No |
 | `SESSION_S3_BUCKET` / `SESSION_S3_REGION` | Where paused agents wait | If s3 |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Access to that bucket | If s3 |
@@ -365,9 +375,15 @@ escalated runs that silently never resume.
   survives a deploy and can still be answered.
 - **Amazon Bedrock** — the intended fallback provider (see above).
 
+**Model providers**
+
+- **Google Gemini** — the agent's reasoning: which tool to call next, when to escalate,
+  and the prose it writes about its own decisions
+- **Groq** — bulk file classification. Hundreds of files per run in chunked batches, where
+  throughput matters more than reasoning depth
+
 **Everything else**
 
-- **Google Gemini** — the agent's reasoning model
 - **FastAPI** · **Neon Postgres** · **Next.js** · **Electron** · **Tailwind**
 
 ---
