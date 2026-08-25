@@ -386,8 +386,6 @@ escalated runs that silently never resume.
 
 ## Pre-existing work
 
-> Please review and confirm this section before submitting it anywhere. It is a statement
-> about your own work and should be in your words.
 
 Development on this repository began on **6 August 2026**. The file scanner, classification
 pipeline, undo journal, authentication and user interface were built between 6 and 18
