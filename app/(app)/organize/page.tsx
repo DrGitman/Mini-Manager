@@ -19,6 +19,7 @@ import type { ClassificationResult, FolderSuggestion, ClassifyResponse } from '@
 import { getSession } from '@/lib/session'
 import { migrateLegacyMonitorFolders, resolveScopeFolders } from '@/lib/folder-digests'
 import { isDemoSession, DEMO_FILES, DEMO_FOLDER_NAME } from '@/lib/demo-session'
+import { bucketFor, mayPreselect } from '@/lib/bucketing'
 
 // SHA-256 fingerprint matching classify.py: sha256(name.lower() + ext.lower() + size)
 async function sha256Hex(text: string): Promise<string> {
@@ -542,7 +543,8 @@ export default function OrganizePage() {
   function finishScan(res: ClassifyResponse) {
     const all: Proposal[] = res.results.map((r: ClassificationResult) => {
       const file = fileMapRef.current.get(r.id) ?? { id: r.id, name: r.id, extension: '', relativePath: '', sizeBytes: 0, modifiedAt: Date.now() }
-      const bucket: ConfidenceBucket = r.confidence >= 0.85 ? 'auto' : r.confidence >= 0.7 ? 'review' : 'input'
+      const sensitivity = r.sensitivity ?? 'none'
+      const bucket = bucketFor(r.confidence, sensitivity)
       return { id: `p-${r.id}`, file, targetFolder: r.target_folder, newName: r.new_name, category: r.category, reason: r.reason, confidence: r.confidence, bucket, selected: false, source: r.source, sensitivity: r.sensitivity ?? 'none' }
     })
 
@@ -564,7 +566,9 @@ export default function OrganizePage() {
 
     setProposals(all)
     setFolderSuggestions(res.folder_suggestions ?? [])
-    setSelected(new Set(all.filter(p => p.bucket === 'auto').map(p => p.id)))
+    setSelected(new Set(
+      all.filter(p => mayPreselect(p.bucket, p.sensitivity)).map(p => p.id),
+    ))
     setSelectedFolders(new Set())
     setScanState('done')
 

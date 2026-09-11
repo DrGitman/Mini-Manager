@@ -13,8 +13,18 @@ import {
   ShieldCheck,
   LogOut,
   FolderOpen,
+  ArrowLeft,
 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { signOut } from '@/lib/session'
+import { isDemoSession, clearDemoSession } from '@/lib/demo-session'
+
+/**
+ * Where "Back to the site" goes. Overridable because the marketing site and the
+ * app are deployed separately and their hostnames are not derivable from here.
+ */
+const MARKETING_SITE =
+  process.env.NEXT_PUBLIC_SITE_URL || 'https://mini-manager-na.netlify.app'
 import type { DemoUser } from '@/lib/types'
 
 interface SidebarProps {
@@ -31,6 +41,9 @@ interface NavItem {
 export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
+  // Read once on mount: sessionStorage is unavailable during the server render.
+  const [isDemo, setIsDemo] = useState(false)
+  useEffect(() => setIsDemo(isDemoSession()), [])
   const navItems: NavItem[] = [
     { label: 'Overview',   href: '/overview',    icon: LayoutDashboard },
     { label: 'Organize',   href: '/organize',    icon: Sparkles        },
@@ -43,6 +56,20 @@ export function Sidebar({ user }: SidebarProps) {
   function handleSignOut() {
     signOut()
     router.push('/login')
+  }
+
+  /**
+   * Leave the demo.
+   *
+   * Clears the guest session so a shared machine does not hand the next person
+   * a half-used demo, then returns to the marketing site. The server-side
+   * ledger is untouched, which is the point: the allowance belongs to the
+   * address, not to the tab.
+   */
+  function handleLeaveDemo() {
+    signOut()
+    clearDemoSession()
+    window.location.href = MARKETING_SITE
   }
 
   function NavLink({ item }: { item: NavItem }) {
@@ -98,15 +125,36 @@ export function Sidebar({ user }: SidebarProps) {
         </button>
       </div>
 
-      {/* Sign out */}
+      {/*
+        Sign out, or leave the demo.
+
+        A guest has no account to sign out of, so the button used to drop them
+        on a login screen they could never get past — a dead end in the one
+        place a judge is most likely to click. It sends them back to the site
+        instead.
+
+        Leaving does not refund anything. The action ledger is keyed to the
+        address in Postgres, not to the browser session, so reopening the demo
+        resumes the same allowance rather than granting a new one.
+      */}
       <div className="border-t border-border px-3 py-2">
-        <button
-          onClick={handleSignOut}
-          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <LogOut size={13} />
-          Sign out
-        </button>
+        {isDemo ? (
+          <button
+            onClick={handleLeaveDemo}
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <ArrowLeft size={13} />
+            Back to the site
+          </button>
+        ) : (
+          <button
+            onClick={handleSignOut}
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <LogOut size={13} />
+            Sign out
+          </button>
+        )}
       </div>
     </aside>
   )
