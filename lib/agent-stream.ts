@@ -49,6 +49,15 @@ export interface AgentStreamRequest {
   scanContext?: unknown
   preferences?: unknown
   sessionId?: string
+  /**
+   * Override the signed-in user's token.
+   *
+   * The guest demo holds a short-lived token that deliberately is not written
+   * to `mm.token` — a visitor who already has an account must not have their
+   * real session replaced by opening the demo, and the demo must not
+   * accidentally run as them.
+   */
+  authToken?: string
 }
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? ''
@@ -115,8 +124,13 @@ async function consume(
   }
 }
 
-async function post(path: string, body: unknown, handlers: AgentStreamHandlers): Promise<void> {
-  const jwt = token()
+async function post(
+  path: string,
+  body: unknown,
+  handlers: AgentStreamHandlers,
+  override?: string,
+): Promise<void> {
+  const jwt = override ?? token()
   try {
     const response = await fetch(`${BASE}${path}`, {
       method: 'POST',
@@ -129,11 +143,21 @@ async function post(path: string, body: unknown, handlers: AgentStreamHandlers):
 
     if (!response.ok) {
       const detail = await response.text().catch(() => '')
-      handlers.onError?.(
-        response.status === 401
-          ? 'Your session has ended. Please sign in again.'
-          : `The assistant is unavailable (${response.status}). ${detail.slice(0, 120)}`,
-      )
+      // 402 is the demo running out of actions. It is a normal end state, not
+      // a fault, so it carries its own message rather than "unavailable".
+      let message: string
+      if (response.status === 401) {
+        message = 'Your session has ended. Please sign in again.'
+      } else if (response.status === 402) {
+        try {
+          message = JSON.parse(detail).detail ?? 'That is the end of the demo.'
+        } catch {
+          message = 'That is the end of the demo.'
+        }
+      } else {
+        message = `The assistant is unavailable (${response.status}). ${detail.slice(0, 120)}`
+      }
+      handlers.onError?.(message)
       return
     }
 
@@ -153,7 +177,7 @@ export async function streamAgent(
     scan_context: req.scanContext ?? null,
     preferences: req.preferences ?? null,
     session_id: req.sessionId ?? null,
-  }, handlers)
+  }, handlers, req.authToken)
 }
 
 /** Answer a question the agent stopped to ask, and let it carry on. */

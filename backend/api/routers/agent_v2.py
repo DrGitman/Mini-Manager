@@ -48,6 +48,7 @@ from ..services.agent_tools import (
 )
 from ..services.approval import ApprovalHook
 from ..services.sessions import build_session_manager
+from .demo import consume_if_demo
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["agent-v2"])
@@ -209,6 +210,12 @@ async def agent_v2(
     body: AgentV2Request,
     user: dict = Depends(get_current_user),
 ) -> StreamingResponse:
+    # Spent before the stream opens, not after. Once the response starts
+    # streaming the status code is already sent, so a limit checked later could
+    # only be reported inside the body — and by then the model call has been
+    # paid for anyway. A guest who is out of actions gets a clean 402 here.
+    await consume_if_demo(user, "chat")
+
     return StreamingResponse(
         stream_agent(body.message, body.scan_context, body.preferences, body.session_id),
         media_type="text/event-stream",
@@ -237,6 +244,11 @@ async def agent_v2_resume(
     and the interrupt it was waiting on, then handed the user's answer. It picks
     up from the tool call it stopped at rather than starting the goal again.
     """
+    # Answering an escalation is a real turn — the agent runs again from where
+    # it paused. Counting it is the point: deciding about the passport is one of
+    # the five things the demo is for.
+    await consume_if_demo(user, "escalation")
+
     return StreamingResponse(
         stream_resume(body),
         media_type="text/event-stream",

@@ -31,6 +31,14 @@ async def _is_revoked(payload: dict) -> bool:
     with it. Treating that as "not revoked" let a deleted account keep using the
     API until its token happened to expire.
     """
+    # A guest demo token has no account behind it by design. Its `sub` is
+    # "demo:<session>", which is not a user id, so the lookup below would find
+    # no row and revoke it as though the account had been deleted — meaning
+    # every demo request 401s. Its lifetime is its two-hour expiry and its
+    # action ledger, both enforced in routers/demo.py.
+    if payload.get("demo"):
+        return False
+
     iat = payload.get("iat")
     user_id = payload.get("sub")
     if not user_id:

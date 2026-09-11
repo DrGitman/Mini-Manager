@@ -229,7 +229,7 @@ function AppWindowMockup() {
         <div className="w-3 h-3 rounded-full bg-yellow-500/70 shrink-0" />
         <div className="w-3 h-3 rounded-full bg-green-500/70 shrink-0" />
         <span className="ml-2 sm:ml-3 text-[12px] sm:text-[13px] text-[#9198b7] truncate">
-          Mini Manager — Organize
+          Mini Manager · Organize
         </span>
         {/* Tab pills are decorative — drop them below lg so the bar never overflows */}
         <div className="ml-auto hidden lg:flex items-center gap-1">
@@ -319,16 +319,20 @@ function Hero() {
           <FadeIn delay={0.08}>
             <h1 className="font-bold text-[34px] sm:text-[48px] md:text-[64px] leading-[1.1] text-[#edeef3] text-center text-balance">
               Your AI-Powered{" "}
-              <span className="bg-gradient-to-r from-[#00E5FF] to-[#7C4DFF] bg-clip-text text-transparent">
-                File Organizer
-              </span>
+              {/*
+                The app's own primary blue, not a cyan-to-violet gradient. The
+                gradient belonged to no part of the product, and a headline is
+                the wrong place to spend colour that the interface never uses.
+                #4C81FA is --primary in the app's dark theme; 5.22:1 here.
+              */}
+              <span className="text-[#4C81FA]">File Organizer</span>
             </h1>
           </FadeIn>
 
           {/* Subtitle */}
           <FadeIn delay={0.16}>
             <p className="text-[15px] sm:text-[17px] leading-[1.65] text-[#bec2d3] text-center max-w-[660px]">
-              Mini Manager scans any folder, classifies every file with AI, and auto-organizes them into the right place — with confidence scores, sensitivity detection, and full undo history.
+              Mini Manager scans any folder, classifies every file with AI, and auto-organizes them into the right place, with confidence scores, sensitivity detection, and full undo history.
             </p>
           </FadeIn>
 
@@ -393,12 +397,12 @@ const features = [
   {
     icon: RotateCcw,
     title: "Full Undo & History",
-    desc: "Every file operation is logged in a journal. Roll back any move, rename, or organization action instantly — no data ever lost.",
+    desc: "Every file operation is logged in a journal. Roll back any move, rename, or organization action instantly. No data is ever lost.",
   },
   {
     icon: SlidersHorizontal,
     title: "Conventions & Rules",
-    desc: 'Write natural-language rules like "Put all invoices in Finance/Invoices/2026" — the AI always follows them on every scan.',
+    desc: 'Write natural-language rules like "Put all invoices in Finance/Invoices/2026". The agent follows them on every scan.',
   },
   {
     icon: BarChart2,
@@ -413,7 +417,7 @@ const features = [
   {
     icon: Brain,
     title: "Corrections Memory",
-    desc: "Every time you correct an AI decision, Mini Manager learns from it — improving classifications across all future scans.",
+    desc: "Every time you correct an AI decision, Mini Manager learns from it, improving classifications across all future scans.",
   },
   {
     icon: Lock,
@@ -430,7 +434,7 @@ function Features() {
           <span className="text-[12px] font-medium text-[#00E5FF] uppercase tracking-[0.15em]">Capabilities</span>
           <h2 className="font-bold text-[28px] sm:text-[34px] md:text-[42px] leading-[1.15] text-[#edeef3]">Why Mini Manager?</h2>
           <p className="text-[16px] leading-[1.65] text-[#bec2d3]">
-            Everything you need to take back control of your file system — powered by Groq and Gemini AI working together to classify, organize, and protect your files.
+            Everything you need to take back control of your file system, built on AWS Strands with Groq and Gemini working together to classify, organize, and protect your files.
           </p>
         </div>
 
@@ -457,7 +461,16 @@ function Features() {
 
 // ─── DOWNLOADS ────────────────────────────────────────────────────────────────
 
+// The demo is a route on this same site, so this is a plain path rather than an
+// absolute URL. It used to point at a separately hosted Next app, which meant a
+// build-time environment variable and a link that silently pointed at localhost
+// whenever that variable was missing.
+const DEMO_URL = "/demo";
+
 function Downloads() {
+  // Only the desktop installer lives here. The web demo has its own section
+  // further down the page, and listing it twice gave the same button two
+  // different homes.
   const options = [
     {
       Icon: MonitorDown,
@@ -465,21 +478,13 @@ function Downloads() {
       title: "Setup.exe Direct Download",
       version: "v1.0.0-beta",
       size: "185 MB",
-      desc: "Get full desktop power for heavy-duty organizing, document scanning, and AI assistance on Windows.",
-      cta: "Download Setup.exe",
-      href: "https://github.com/DrGitman/Mini-Manager/releases/latest/download/Mini-Manager-Setup.exe",
-      primary: true,
-    },
-    {
-      Icon: Globe,
-      tag: "Live Preview",
-      title: "Web Demo",
-      version: "No install needed",
-      size: "",
-      desc: "Launch our web version in guest mode. Experience the full AI-powered UI in your browser.",
-      cta: "Launch Online Demo",
-      href: "#demo",
+      desc: "The full desktop agent: scans real folders on a schedule, works while you are away, and carries out changes on your own machine.",
+      // Deliberately not a link yet. The installer is finished but not
+      // released, and a button that 404s is worse than one that says "soon".
+      cta: "Coming soon",
+      href: "",
       primary: false,
+      disabled: true,
     },
   ];
 
@@ -497,7 +502,9 @@ function Downloads() {
           </a>
         </Reveal>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 w-full">
+        {/* One card now, so it is centred and capped rather than stretched
+            across a three-column grid. */}
+        <div className="grid grid-cols-1 gap-5 w-full max-w-[420px]">
           {options.map((o) => (
             <div
               key={o.title}
@@ -505,7 +512,7 @@ function Downloads() {
                 o.primary
                   ? "bg-gradient-to-b from-[#00E5FF]/10 to-[#7C4DFF]/10 border-[#00E5FF]/30"
                   : "bg-[#171c2f] border-[#3c4561]"
-              }`}
+              } ${o.disabled ? "opacity-55" : ""}`}
             >
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
@@ -523,16 +530,34 @@ function Downloads() {
                 </div>
               </div>
               <p className="text-[14px] leading-[1.6] text-[#bec2d3] flex-1">{o.desc}</p>
-              <a
-                href={o.href}
-                className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-[15px] font-bold transition-all ${
-                  o.primary
-                    ? "bg-[#3364db] text-white hover:opacity-90"
-                    : "bg-[#1d2440] text-[#bec2d3] hover:bg-[#232b50] border border-[#3c4561]"
-                }`}
-              >
-                {o.cta} <ArrowRight size={15} />
-              </a>
+
+              {/*
+                A disabled option renders as a real <button disabled>, not a
+                faded <a>. A greyed-out link is still a link: it takes focus,
+                it is still clickable, and a keyboard user lands on it with no
+                indication it goes nowhere.
+              */}
+              {o.disabled ? (
+                <button
+                  type="button"
+                  disabled
+                  aria-disabled="true"
+                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-[15px] font-bold bg-[#1d2440]/60 text-[#9198b7] border border-[#3c4561] cursor-not-allowed"
+                >
+                  {o.cta}
+                </button>
+              ) : (
+                <a
+                  href={o.href}
+                  className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-[15px] font-bold transition-all ${
+                    o.primary
+                      ? "bg-[#3364db] text-white hover:opacity-90"
+                      : "bg-[#1d2440] text-[#bec2d3] hover:bg-[#232b50] border border-[#3c4561]"
+                  }`}
+                >
+                  {o.cta} <ArrowRight size={15} />
+                </a>
+              )}
             </div>
           ))}
         </div>
@@ -597,11 +622,11 @@ function Demo() {
               <div>
                 <p className="font-bold text-[22px] text-[#edeef3] mb-1">Interactive Demo</p>
                 <p className="text-[14px] text-[#9198b7] max-w-[320px]">
-                  Try the full Mini Manager UI — AI classification, organize, undo, corrections, and chat agent.
+                  Five actions on a sample folder, running the real agent. No account, no install.
                 </p>
               </div>
               <a
-                href="#"
+                href={DEMO_URL}
                 className="bg-[#3364db] text-white font-bold text-[15px] px-8 py-3 rounded-xl hover:opacity-90 transition-opacity flex items-center gap-2"
               >
                 Launch Demo <ArrowRight size={16} />
@@ -619,27 +644,42 @@ function Demo() {
 function AISection() {
   const models = [
     {
-      name: "Groq llama-3.3-70b",
+      // Strands is the control flow, not a third model — it decides which tool
+      // runs next and when a human has to be asked. Listing it first because
+      // it is the thing that makes this an agent rather than a classifier.
+      name: "AWS Strands Agents SDK",
+      badge: "Agent",
+      color: "#34d399",
+      role: "The Agent Loop",
+      points: [
+        "Eleven tools the agent chooses between on its own",
+        "Lifecycle hooks that pause the agent mid-task to ask you",
+        "Durable sessions on Amazon S3, so a paused run survives a restart",
+        "Streams every tool call as it executes, not a narrated plan",
+      ],
+    },
+    {
+      name: "Groq gpt-oss-120b",
       badge: "Speed",
       color: "#00E5FF",
-      role: "Fast Classification at Scale",
+      role: "Classification at Scale",
       points: [
-        "Classifies hundreds of files per second",
+        "Classifies hundreds of files in chunked batches",
         "Assigns categories from filenames, extensions, and metadata",
-        "Provides confidence scores for every classification",
-        "Handles batch operations for large folder scans",
+        "Returns a confidence score for every single file",
+        "Backs off and splits automatically on rate limits",
       ],
     },
     {
       name: "Google Gemini",
-      badge: "Intelligence",
+      badge: "Reasoning",
       color: "#7C4DFF",
-      role: "Deep Understanding & Reasoning",
+      role: "Judgement & Its Own Words",
       points: [
-        "Powers the AI chat agent for natural language commands",
+        "Decides which tool to call next, and when to stop and ask",
+        "Writes the reason it left a file alone, in its own words",
         "Drives the conventions & rules engine",
-        "Provides deep file content understanding",
-        "Infers organizational style from your first scan",
+        "Summarises what it did while you were away",
       ],
     },
   ];
@@ -648,14 +688,20 @@ function AISection() {
     <section id="gemini" className="w-full bg-[#0c1120] py-16 md:py-24 px-5 sm:px-6 border-t border-[#3c4561]">
       <div className="flex flex-col items-center gap-16 max-w-[1204px] mx-auto">
         <div className="flex flex-col items-center gap-4 max-w-[700px] text-center">
-          <span className="text-[12px] font-medium text-[#00E5FF] uppercase tracking-[0.15em]">AI Intelligence</span>
-          <h2 className="font-bold text-[28px] sm:text-[34px] md:text-[42px] leading-[1.15] text-[#edeef3]">Dual AI Intelligence Layer</h2>
+          <span className="text-[12px] font-medium text-[#00E5FF] uppercase tracking-[0.15em]">Agent Architecture</span>
+          <h2 className="font-bold text-[28px] sm:text-[34px] md:text-[42px] leading-[1.15] text-[#edeef3]">
+            An Agent, Not a Classifier
+          </h2>
           <p className="text-[16px] leading-[1.65] text-[#bec2d3]">
-            Mini Manager uses two AI models working in tandem. Groq's llama-3.3-70b handles high-speed file classification at scale. Google Gemini provides deep understanding, powering the chat agent, rules engine, and onboarding inference.
+            Mini Manager is built on the <span className="font-bold text-[#34d399]">AWS Strands Agents SDK</span>.
+            Strands is the control flow: the agent picks its own tools, decides when it is confident enough to
+            act, and stops to ask you when it is not. Two models sit underneath it. Groq handles bulk
+            classification, Gemini handles judgement, and the agent orchestrates both without either one
+            being in charge.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
           {models.map((m) => (
             <div key={m.name} className="bg-[#171c2f] border border-[#3c4561] rounded-2xl p-7 flex flex-col gap-5">
               <div className="flex items-center justify-between">
@@ -686,58 +732,6 @@ function AISection() {
                   </li>
                 ))}
               </ul>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── ARCHITECTURE ─────────────────────────────────────────────────────────────
-
-const techBadges = [
-  { name: "Next.js", layer: "App" },
-  { name: "FastAPI", layer: "API" },
-  { name: "SQLite", layer: "Database" },
-  { name: "Groq", layer: "AI" },
-  { name: "Gemini", layer: "AI" },
-  { name: "Electron", layer: "App" },
-  { name: "Tailwind CSS", layer: "UI" },
-  { name: "shadcn/ui", layer: "UI" },
-  { name: "React", layer: "App" },
-  { name: "TypeScript", layer: "App" },
-  { name: "Python", layer: "API" },
-  { name: "asyncpg", layer: "Database" },
-];
-
-const layerColors: Record<string, string> = {
-  App: "bg-purple-500/20 text-purple-400 border-purple-500/30",
-  API: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-  AI: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
-  Database: "bg-orange-500/20 text-orange-400 border-orange-500/30",
-  UI: "bg-pink-500/20 text-pink-400 border-pink-500/30",
-};
-
-function Architecture() {
-  return (
-    <section id="architecture" className="w-full bg-[#171c2f] py-16 md:py-24 px-5 sm:px-6 border-t border-[#3c4561]">
-      <div className="flex flex-col items-center gap-16 max-w-[1204px] mx-auto">
-        <div className="flex flex-col items-center gap-4 max-w-[640px] text-center">
-          <span className="text-[12px] font-medium text-[#00E5FF] uppercase tracking-[0.15em]">Built On</span>
-          <h2 className="font-bold text-[28px] sm:text-[34px] md:text-[42px] leading-[1.15] text-[#edeef3]">Modern Stack</h2>
-          <p className="text-[16px] leading-[1.65] text-[#bec2d3]">
-            A lean, performant architecture pairing an Electron desktop shell with a FastAPI backend and dual AI models for fast, accurate file organization.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 w-full">
-          {techBadges.map((t) => (
-            <div key={t.name} className="bg-[#0c1120] border border-[#3c4561] rounded-xl p-4 flex items-center gap-3">
-              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-lg border shrink-0 ${layerColors[t.layer]}`}>
-                {t.layer}
-              </span>
-              <span className="font-bold text-[15px] text-[#edeef3]">{t.name}</span>
             </div>
           ))}
         </div>
@@ -838,7 +832,7 @@ function Screenshots() {
               <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/70" />
               <div className="w-2.5 h-2.5 rounded-full bg-green-500/70" />
               <span className="ml-2 text-[12px] font-medium text-[#9198b7]">
-                Mini Manager — {s.name}
+                Mini Manager · {s.name}
               </span>
             </div>
             <div className="p-8 flex flex-col gap-6">
@@ -867,44 +861,6 @@ function Screenshots() {
     </section>
   );
 }
-
-// ─── ROADMAP ──────────────────────────────────────────────────────────────────
-
-const roadmap = [
-  {
-    phase: "Phase 1",
-    title: "Core Organizer",
-    status: "complete" as const,
-    items: [
-      "Core architecture: Next.js + FastAPI + SQLite",
-      "Groq llama-3.3-70b file classification",
-      "Folder scanner & auto-organize engine",
-      "Full undo journal & history log",
-    ],
-  },
-  {
-    phase: "Phase 2",
-    title: "Intelligence Layer",
-    status: "current" as const,
-    items: [
-      "Corrections memory (continuous learning)",
-      "Natural-language conventions engine",
-      "Sensitivity detection & flagging",
-      "Blocklist & protected paths",
-    ],
-  },
-  {
-    phase: "Phase 3",
-    title: "Expansion",
-    status: "upcoming" as const,
-    items: [
-      "Cloud folder sync (Google Drive, OneDrive)",
-      "Scheduled auto-organize with cron",
-      "Multi-user workspace support",
-      "CLI mode & public API",
-    ],
-  },
-];
 
 // ─── REVIEWS ──────────────────────────────────────────────────────────────────
 //
@@ -980,70 +936,6 @@ function Reviews() {
   )
 }
 
-function Roadmap() {
-  const statusStyle = {
-    complete: { badge: "bg-green-500/15 text-green-400 border-green-500/30", label: "Complete", icon: Check },
-    current: { badge: "bg-[#00E5FF]/15 text-[#00E5FF] border-[#00E5FF]/30", label: "In Progress", icon: Sparkles },
-    upcoming: { badge: "bg-[#7C4DFF]/15 text-[#7C4DFF] border-[#7C4DFF]/30", label: "Upcoming", icon: ArrowRight },
-  };
-
-  return (
-    <section className="w-full bg-[#171c2f] py-16 md:py-24 px-5 sm:px-6 border-t border-[#3c4561]">
-      <div className="flex flex-col items-center gap-16 max-w-[1204px] mx-auto">
-        <Reveal className="flex flex-col items-center gap-4 text-center">
-          <span className="text-[12px] font-medium text-[#00E5FF] uppercase tracking-[0.15em]">Roadmap</span>
-          <h2 className="font-bold text-[28px] sm:text-[34px] md:text-[42px] leading-[1.15] text-[#edeef3]">Project Roadmap</h2>
-          <p className="text-[16px] leading-[1.65] text-[#bec2d3] max-w-[480px]">
-            From hackathon prototype to a fully-featured AI file organizer.
-          </p>
-        </Reveal>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 w-full">
-          {roadmap.map((r) => {
-            const style = statusStyle[r.status];
-            return (
-              <div
-                key={r.phase}
-                className={`rounded-2xl border p-6 flex flex-col gap-5 ${
-                  r.status === "current"
-                    ? "bg-gradient-to-b from-[#00E5FF]/10 to-[#7C4DFF]/10 border-[#00E5FF]/30"
-                    : "bg-[#0c1120] border-[#3c4561]"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-[#9198b7] uppercase tracking-wider">{r.phase}</span>
-                  <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${style.badge}`}>
-                    {style.label}
-                  </span>
-                </div>
-                <h3 className="font-bold text-[20px] text-[#edeef3]">{r.title}</h3>
-                <ul className="flex flex-col gap-2.5">
-                  {r.items.map((item) => (
-                    <li key={item} className="flex items-start gap-2.5 text-[14px] text-[#bec2d3]">
-                      <Check
-                        size={14}
-                        className="shrink-0 mt-0.5"
-                        style={{
-                          color:
-                            r.status === "complete"
-                              ? "#4ade80"
-                              : r.status === "current"
-                              ? "#00E5FF"
-                              : "#7C4DFF",
-                        }}
-                      />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </section>
-  );
-}
 
 // ─── FAQ ──────────────────────────────────────────────────────────────────────
 
@@ -1062,15 +954,15 @@ const faqs = [
   },
   {
     q: "Can I undo mistakes?",
-    a: "Yes — every file move and rename is logged in a journal. You can roll back any operation instantly from the History screen, with full timestamps.",
+    a: "Yes. Every file move and rename is logged in a journal. You can roll back any operation instantly from the History screen, with full timestamps.",
   },
   {
     q: "How does it learn my preferences?",
-    a: "Through corrections memory — every time you correct an AI classification, Mini Manager records it and applies your preference to all future scans.",
+    a: "Through corrections memory. Every time you correct an AI classification, Mini Manager records it and applies your preference to all future scans.",
   },
   {
     q: "What happens to sensitive files?",
-    a: "Mini Manager flags files it detects as sensitive (financial, personal, identity documents) and holds them for your explicit approval before moving — they are never auto-organized.",
+    a: "Mini Manager flags files it detects as sensitive (financial, personal, identity documents) and holds them for your explicit approval before moving. They are never auto-organized.",
   },
 ];
 
@@ -1225,10 +1117,12 @@ function Footer() {
       { label: "Downloads", href: "#downloads" },
       { label: "Demo", href: "#demo" },
     ],
+    // "Architecture" and "Roadmap" pointed at sections that no longer exist —
+    // one to a deleted anchor, one to "#", which just jumps to the top.
     "Learn More": [
-      { label: "AI Integration", href: "#gemini" },
-      { label: "Architecture", href: "#architecture" },
-      { label: "Roadmap", href: "#" },
+      { label: "Agent Architecture", href: "#gemini" },
+      { label: "Every Screen", href: "#screens" },
+      { label: "Support", href: "#support" },
     ],
   };
 
@@ -1240,7 +1134,7 @@ function Footer() {
           <div className="flex flex-col gap-4 max-w-[300px]">
             <img src="/logo-white-full.png" alt="Mini Manager" className="h-12 w-auto object-contain object-left" />
             <p className="text-[14px] leading-[1.6] text-[#9198b7]">
-              AI-powered file organizer for Windows and web. Scan, classify, and organize your files automatically — with full undo, sensitivity detection, and corrections memory.
+              AI-powered file organizer for Windows and web. Scan, classify, and organize your files automatically, with full undo, sensitivity detection, and corrections memory.
             </p>
           </div>
           {/* Links */}
@@ -1269,8 +1163,10 @@ function Footer() {
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-[14px] text-[#9198b7]">© 2026 Mini Manager. All rights reserved.</p>
-          <p className="text-[14px] text-[#9198b7] flex items-center gap-1.5">
-            Powered by{" "}
+          <p className="text-[14px] text-[#9198b7] flex flex-wrap items-center justify-center gap-x-1.5">
+            Built on{" "}
+            <span className="font-bold text-[#34d399]">AWS Strands</span>
+            {", powered by "}
             <span className="font-bold text-[#00E5FF]">Groq</span>
             {" & "}
             <span className="font-bold text-[#7C4DFF]">Gemini</span>
@@ -1292,10 +1188,8 @@ export default function HomePage() {
       <Downloads />
       <Demo />
       <AISection />
-      <Architecture />
       <Screenshots />
       <Reviews />
-      <Roadmap />
       <FAQ />
       <Support />
       <Footer />

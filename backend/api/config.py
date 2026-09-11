@@ -77,7 +77,15 @@ class Settings(BaseSettings):
     smtp_starttls: bool = True
 
     # CORS
-    frontend_url: str = "https://mini-manager.vercel.app"
+    # No default origin. This value goes straight into the CORS allowlist, so a
+    # default is a domain the API trusts whenever the variable is unset.
+    #
+    # It used to default to a vercel.app subdomain this project does not own and
+    # never deployed to — someone else holds it. Production overrides
+    # FRONTEND_URL so it was never live, but an unset variable in any other
+    # environment would have allowlisted a stranger's site against this API.
+    # Empty is filtered out below, which fails closed.
+    frontend_url: str = ""
     # Comma-separated extra origins allowed to call the API (preview deploys,
     # custom domains). Leave empty for local development.
     extra_cors_origins: str = ""

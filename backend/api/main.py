@@ -20,7 +20,7 @@ from .routers import (
     auth, classify, explain, scans, preferences, agent,
     stats, notifications, rules, profile, insights, search, journal, mfa, privacy,
     corrections, blocklist, conventions, support_agent, onboarding,
-    agent_v2, runs,
+    agent_v2, runs, demo,
 )
 from .services.db import close_pool, init_pool
 
@@ -97,6 +97,10 @@ _origins = [
     settings.frontend_url,
     *[o.strip() for o in settings.extra_cors_origins.split(",") if o.strip()],
 ]
+# frontend_url is empty when unset, and an empty string in this list would be a
+# meaningless entry rather than a harmless one. Drop blanks so the allowlist
+# only ever contains origins somebody configured on purpose.
+_origins = [o for o in _origins if o and o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
@@ -158,6 +162,8 @@ app.include_router(blocklist.router,       prefix=_PREFIX)
 app.include_router(conventions.router,     prefix=_PREFIX)
 app.include_router(support_agent.router,   prefix=_PREFIX)
 app.include_router(onboarding.router,      prefix=_PREFIX)
+# The public guest demo. Unauthenticated by design; limits live in the router.
+app.include_router(demo.router,            prefix=_PREFIX)
 
 
 # ─── Health check ─────────────────────────────────────────────────────────────
