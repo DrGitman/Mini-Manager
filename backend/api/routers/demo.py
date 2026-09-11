@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -93,12 +94,29 @@ def is_demo(payload: dict) -> bool:
     return bool(payload.get("demo"))
 
 
-def demo_session_id(payload: dict) -> Optional[str]:
-    """The demo_sessions row behind this token, if it is a demo token."""
+async def demo_session_id(payload: dict) -> Optional[str]:
+    """
+    The demo_sessions row behind this token, if it is a guest.
+
+    Looked up by user_id rather than encoded in `sub`. `sub` has to be a plain
+    user UUID because the rest of the application uses it as one directly in
+    SQL — an earlier version prefixed it with "demo:" and every user-scoped
+    endpoint returned 500 for guests.
+    """
     if not is_demo(payload):
         return None
-    sub = str(payload.get("sub") or "")
-    return sub.split(":", 1)[1] if sub.startswith("demo:") else None
+    user_id = payload.get("sub")
+    if not user_id:
+        return None
+    pool = get_pool()
+    return await pool.fetchval(
+        """
+        SELECT id::text FROM demo_sessions
+        WHERE user_id = $1::uuid
+        ORDER BY created_at DESC LIMIT 1
+        """,
+        user_id,
+    )
 
 
 # ─── Responses ────────────────────────────────────────────────────────────────
@@ -172,17 +190,29 @@ async def start_demo(request: Request) -> DemoSession:
             ),
         )
 
+    # A real account, so the guest is an ordinary user everywhere downstream.
+    # The password hash cannot be produced by any password — these exist to be
+    # referenced by foreign keys, never signed into.
+    guest = await pool.fetchrow(
+        """
+        INSERT INTO users (email, name, password_hash, plan)
+        VALUES ($1, 'Guest', '!demo-no-login', 'free')
+        RETURNING id::text, email
+        """,
+        f"guest-{uuid.uuid4().hex[:12]}@demo.invalid",
+    )
+
     row = await pool.fetchrow(
         """
-        INSERT INTO demo_sessions (ip, user_agent)
-        VALUES ($1, $2)
+        INSERT INTO demo_sessions (ip, user_agent, user_id)
+        VALUES ($1, $2, $3::uuid)
         RETURNING id::text, actions_used
         """,
-        ip, (request.headers.get("user-agent") or "")[:300],
+        ip, (request.headers.get("user-agent") or "")[:300], guest["id"],
     )
 
     token = create_token(
-        {"sub": f"demo:{row['id']}", "demo": True, "email": "guest@demo"},
+        {"sub": guest["id"], "demo": True, "email": guest["email"]},
         expiry_hours=DEMO_TOKEN_HOURS,
     )
     logger.info("demo: session %s started from %s", row["id"][:8], ip)
@@ -199,7 +229,7 @@ async def start_demo(request: Request) -> DemoSession:
 @router.get("/demo/state", response_model=DemoState)
 async def demo_state(user: dict = Depends(get_current_user)) -> DemoState:
     """How much of the demo is left. Returns the truth, not the browser's copy."""
-    sid = demo_session_id(user)
+    sid = await demo_session_id(user)
     if sid is None:
         raise HTTPException(status_code=400, detail="Not a demo session")
 
@@ -224,7 +254,7 @@ async def spend_action(
     undoing it, correcting a classification. Agent turns consume their action
     inside the agent route instead, so nothing is counted twice.
     """
-    sid = demo_session_id(user)
+    sid = await demo_session_id(user)
     if sid is None:
         raise HTTPException(status_code=400, detail="Not a demo session")
 
@@ -332,6 +362,6 @@ async def consume_if_demo(user: dict, kind: str) -> None:
     Called from the agent route so the limit is enforced where the money is
     actually spent, rather than trusting the client to have asked first.
     """
-    sid = demo_session_id(user)
+    sid = await demo_session_id(user)
     if sid is not None:
         await consume_action(sid, kind)

@@ -4,7 +4,9 @@ import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import { useEffect, useState, useCallback } from 'react'
 import { announceNewEscalations, type Escalation } from '@/lib/escalations'
-import { Bell, Settings, User, LogOut, Sparkles, ScanLine, Undo2, ListPlus, BarChart3, Archive, ShieldQuestion } from 'lucide-react'
+import { isDemoSession, fetchDemoState } from '@/lib/demo-session'
+import { getToken } from '@/lib/session'
+import { Bell, Settings, User, LogOut, Sparkles, ScanLine, Undo2, ListPlus, BarChart3, Archive, ShieldQuestion, ShieldAlert } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -201,6 +203,10 @@ export function TopBar({ unreadCount, user, aiOpen, onAiToggle }: TopBarProps) {
       </div>
 
       {/* Right actions */}
+      {/* Guest demo only. Renders nothing for a signed-in user, so the real
+          app is unchanged by the demo existing. */}
+      <DemoCounter />
+
       <div className="flex items-center gap-1 shrink-0">
         {/* AI Assistant toggle */}
         <button
@@ -270,5 +276,46 @@ export function TopBar({ unreadCount, user, aiOpen, onAiToggle }: TopBarProps) {
         </DropdownMenu>
       </div>
     </header>
+  )
+}
+
+/**
+ * How much of the guest demo is left.
+ *
+ * Reads the server's count rather than a local tally: the ledger is in
+ * Postgres because the actions cost real model credits, and a number in the
+ * corner that disagrees with the server is worse than no number at all.
+ */
+function DemoCounter() {
+  const [state, setState] = useState<{ actions_used: number; limit: number } | null>(null)
+
+  useEffect(() => {
+    if (!isDemoSession()) return
+    let cancelled = false
+
+    async function refresh() {
+      const token = getToken()
+      if (!token) return
+      const fresh = await fetchDemoState(token)
+      if (!cancelled && fresh) setState(fresh)
+    }
+
+    refresh()
+    // Picks up actions spent elsewhere in the app — a scan on Organize does not
+    // route through this component.
+    const timer = setInterval(refresh, 5000)
+    return () => { cancelled = true; clearInterval(timer) }
+  }, [])
+
+  if (!state) return null
+
+  return (
+    <span
+      title="The demo runs the real agent, so it is limited"
+      className="ml-auto flex shrink-0 items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-[12px] font-medium text-amber-700 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-400"
+    >
+      <ShieldAlert className="size-3.5" />
+      Demo · {state.actions_used}/{state.limit} actions
+    </span>
   )
 }

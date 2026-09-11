@@ -15,6 +15,7 @@ from ..services import cache as cache_svc
 from ..services import gemini as gemini_svc
 from ..services import heuristics as heuristics_svc
 from ..services.db import get_pool
+from .demo import consume_if_demo
 from .corrections import get_corrections_hint
 from .blocklist import load_blocklist_paths
 from .conventions import get_conventions_hint, check_convention_drift
@@ -46,6 +47,12 @@ async def classify_files(
     5. Cache store            — write AI results back to cache
     6. Token log              — recorded inside gemini_svc
     """
+    # A guest scan is one of their limited actions, and this is where the
+    # credits are actually spent. Charging here rather than trusting the
+    # client to have asked first means the limit holds however the endpoint
+    # is reached.
+    await consume_if_demo(user, "scan")
+
     user_id: str = user["sub"]
     files = body.files
 

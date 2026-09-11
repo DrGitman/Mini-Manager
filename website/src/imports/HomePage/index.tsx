@@ -465,7 +465,16 @@ function Features() {
 // absolute URL. It used to point at a separately hosted Next app, which meant a
 // build-time environment variable and a link that silently pointed at localhost
 // whenever that variable was missing.
-const DEMO_URL = "/demo";
+// The demo is the real application in guest mode, not a page on this site, so
+// this points at wherever the app is deployed. Set VITE_DEMO_URL at build time.
+//
+// It briefly lived here as a hand-built copy of the Organize screen to avoid a
+// second deployment. That was the wrong trade: a copy drifts from the app the
+// first time either changes, and what a judge looks at then quietly stops being
+// what exists.
+const DEMO_URL =
+  ((import.meta as unknown as { env?: Record<string, string> }).env?.VITE_DEMO_URL) ??
+  "https://mini-manager-app.netlify.app/demo";
 
 function Downloads() {
   // Only the desktop installer lives here. The web demo has its own section

@@ -168,6 +168,12 @@ app.include_router(demo.router,            prefix=_PREFIX)
 
 # ─── Health check ─────────────────────────────────────────────────────────────
 
-@app.get("/health", tags=["meta"])
+# HEAD as well as GET. Uptime monitors default to HEAD because it is the
+# cheapest way to ask "are you alive" — and a GET-only route answers that with
+# 405, which every monitor correctly reports as an outage. The service was
+# healthy the whole time; the check was asking in a way the route refused.
+#
+# FastAPI does not add HEAD to a @app.get route, so it has to be declared.
+@app.api_route("/health", methods=["GET", "HEAD"], tags=["meta"])
 async def health() -> dict[str, str]:
     return {"status": "ok", "version": app.version}

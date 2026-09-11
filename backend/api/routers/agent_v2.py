@@ -32,6 +32,7 @@ from ..middleware.auth import get_current_user
 from ..services.agent_tools import (
     ESCALATION_KEY,
     PREFS_KEY,
+    PROPOSAL_KEY,
     SCAN_CONTEXT_KEY,
     apply_changes,
     check_rules,
@@ -194,10 +195,26 @@ async def stream_agent(
                         if '"ok": false' in text or '"found": false' in text:
                             any_failed = True
 
+        # The proposal the agent actually built, read from agent.state rather
+        # than parsed out of its prose. A client that wants to render the
+        # decisions as a table — which is what the product's Organize screen is
+        # — needs the rows, not a paragraph describing them. Reading state also
+        # means the numbers on screen are the numbers the agent routed on.
+        proposal = agent.state.get(PROPOSAL_KEY) or {}
+        files = proposal.get("files") or []
+
         yield _sse("done", {
             "tools_called": sorted(tool_names),
             # The client shows a completion chip only when work actually landed.
             "succeeded": bool(tool_names) and not any_failed,
+            "proposal": {
+                "files": files,
+                "thresholds": proposal.get("thresholds") or {},
+                "counts": {
+                    d: sum(1 for f in files if f.get("disposition") == d)
+                    for d in ("auto", "review", "escalate")
+                },
+            },
         })
 
     except Exception as exc:                       # noqa: BLE001 - surfaced to the client

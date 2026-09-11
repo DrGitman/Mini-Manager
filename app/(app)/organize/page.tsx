@@ -18,6 +18,7 @@ import { apiClassify, apiSaveScan, apiGetPreferences, apiLogCorrection, apiMarkA
 import type { ClassificationResult, FolderSuggestion, ClassifyResponse } from '@/lib/api'
 import { getSession } from '@/lib/session'
 import { migrateLegacyMonitorFolders, resolveScopeFolders } from '@/lib/folder-digests'
+import { isDemoSession, DEMO_FILES, DEMO_FOLDER_NAME } from '@/lib/demo-session'
 
 // SHA-256 fingerprint matching classify.py: sha256(name.lower() + ext.lower() + size)
 async function sha256Hex(text: string): Promise<string> {
@@ -577,8 +578,48 @@ export default function OrganizePage() {
     }
   }
 
+  /**
+   * The guest demo's scan.
+   *
+   * A browser cannot read a filesystem, so the file list is a fixed sample.
+   * Everything after that is the ordinary path: the same classifier, the same
+   * confidence routing, the same sensitivity checks, and finishScan() building
+   * the same proposals any real scan produces. Nothing downstream is aware the
+   * files were not read off a disk.
+   */
+  async function scanDemo() {
+    setScanState('scanning')
+    setScanProgress(15)
+
+    fileMapRef.current = new Map(DEMO_FILES.map(f => [f.id, f]))
+
+    try {
+      const res = await apiClassify(
+        DEMO_FILES.map(f => ({
+          id: f.id, name: f.name, extension: f.extension,
+          size: f.sizeBytes, modified_at: f.modifiedAt,
+          relative_path: f.relativePath, content_preview: '',
+        })),
+        [],
+        DEMO_FOLDER_NAME,
+      )
+      setScanProgress(100)
+      finishScan(res)
+    } catch (err) {
+      setScanState('idle')
+      setScanProgress(0)
+      // 402 is the demo running out of actions, which is an ending rather than
+      // a failure, so it keeps the server's own wording.
+      const msg = err instanceof Error ? err.message : ''
+      toast(msg.includes('demo action')
+        ? msg
+        : 'Could not classify the sample files. Please try again.')
+    }
+  }
+
   async function handleScan() {
-    if (isElectron) await scanElectron()
+    if (isDemoSession()) await scanDemo()
+    else if (isElectron) await scanElectron()
     else await scanBrowser()
   }
 

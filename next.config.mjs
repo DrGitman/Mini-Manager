@@ -45,7 +45,14 @@ const nextConfig = {
   // Required by the packaged desktop app: electron/main.js boots
   // .next/standalone/server.js. Without this, that file is never produced and
   // the .exe opens with no frontend at all.
-  output: 'standalone',
+  // 'standalone' exists for Electron: scripts/prepare-standalone.mjs copies
+  // .next/standalone into the packaged app so the installer carries its own
+  // server. Netlify's Next runtime cannot deploy a standalone build — it needs
+  // the default output — so the mode is chosen by whoever is building.
+  //
+  // NETLIFY is set automatically in Netlify's build environment, so nothing
+  // needs configuring for this to work, and the Electron build is unaffected.
+  output: process.env.NETLIFY ? undefined : 'standalone',
   allowedDevOrigins: ['fca2-197-234-87-243.ngrok-free.app'],
   typescript: {
     ignoreBuildErrors: true,

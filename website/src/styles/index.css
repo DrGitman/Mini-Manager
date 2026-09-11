@@ -1,5 +1,3 @@
 @import './fonts.css';
 @import './tailwind.css';
 @import './theme.css';
-/* After theme.css, so the .dark block overrides the light defaults it sets. */
-@import './app-dark.css';
