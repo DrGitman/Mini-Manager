@@ -121,7 +121,9 @@ function Navbar() {
             <a
               key={l.label}
               href={l.href}
-              className="font-medium text-[14px] text-[#bec2d3] hover:text-[#edeef3] transition-colors"
+              // py-2 takes the hit region from ~20px to 36px. Pointer input is
+              // forgiving, but 20px was sitting exactly on the macOS floor.
+              className="py-2 font-medium text-[14px] text-[#bec2d3] hover:text-[#edeef3] transition-colors"
             >
               {l.label}
             </a>
@@ -145,10 +147,17 @@ function Navbar() {
         </div>
 
         {/* Mobile hamburger */}
+        {/*
+          -m-1.5 holds the icon where it sat while the box grows to 44x44,
+          Apple's default touch target. It was p-1 around a 24px icon, so 32x32
+          — above the 28x28 floor but short of comfortable, and this is the only
+          way into navigation on a phone.
+        */}
         <button
-          className="md:hidden text-[#bec2d3] hover:text-[#edeef3] p-1"
+          className="md:hidden -m-1.5 flex size-11 items-center justify-center text-[#bec2d3] hover:text-[#edeef3]"
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-label="Toggle menu"
+          aria-expanded={mobileOpen}
         >
           {mobileOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
@@ -161,7 +170,9 @@ function Navbar() {
             <a
               key={l.label}
               href={l.href}
-              className="font-medium text-[15px] text-[#bec2d3] hover:text-[#edeef3] transition-colors"
+              // These are the primary navigation on a phone, where Apple's
+              // default target is 44. py-2.5 with 15px text gets there.
+              className="py-2.5 font-medium text-[15px] text-[#bec2d3] hover:text-[#edeef3] transition-colors"
               onClick={() => setMobileOpen(false)}
             >
               {l.label}
@@ -236,9 +247,9 @@ function AppWindowMockup() {
       </div>
       {/* Table header — Category column is dropped on narrow screens */}
       <div className="grid grid-cols-[1.6fr_1fr] sm:grid-cols-[2fr_1fr_1fr] gap-3 sm:gap-4 px-3 sm:px-5 py-2 border-b border-[#3c4561]">
-        <span className="text-[10px] sm:text-[11px] font-medium text-[#9198b7] uppercase tracking-wider">File</span>
+        <span className="text-[11px] font-medium text-[#9198b7] uppercase tracking-wider">File</span>
         <span className="hidden sm:block text-[11px] font-medium text-[#9198b7] uppercase tracking-wider">Category</span>
-        <span className="text-[10px] sm:text-[11px] font-medium text-[#9198b7] uppercase tracking-wider">Confidence</span>
+        <span className="text-[11px] font-medium text-[#9198b7] uppercase tracking-wider">Confidence</span>
       </div>
       {/* Rows */}
       {heroFiles.map((f, i) => (
@@ -251,7 +262,7 @@ function AppWindowMockup() {
           className="grid grid-cols-[1.6fr_1fr] sm:grid-cols-[2fr_1fr_1fr] gap-3 sm:gap-4 px-3 sm:px-5 py-2.5 border-b border-[#2a3050] hover:bg-[#1d2440] transition-colors"
         >
           <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${extColors[f.ext] ?? "bg-gray-500/20 text-gray-400"}`}>
+            <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded shrink-0 ${extColors[f.ext] ?? "bg-gray-500/20 text-gray-400"}`}>
               {f.ext}
             </span>
             <span className="text-[12px] sm:text-[13px] text-[#bec2d3] truncate">{f.name}</span>
@@ -453,7 +464,7 @@ function Downloads() {
       tag: "Windows Installer",
       title: "Setup.exe Direct Download",
       version: "v1.0.0-beta",
-      size: "184 MB",
+      size: "185 MB",
       desc: "Get full desktop power for heavy-duty organizing, document scanning, and AI assistance on Windows.",
       cta: "Download Setup.exe",
       href: "https://github.com/DrGitman/Mini-Manager/releases/latest/download/Mini-Manager-Setup.exe",
@@ -723,7 +734,7 @@ function Architecture() {
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 w-full">
           {techBadges.map((t) => (
             <div key={t.name} className="bg-[#0c1120] border border-[#3c4561] rounded-xl p-4 flex items-center gap-3">
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border shrink-0 ${layerColors[t.layer]}`}>
+              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-lg border shrink-0 ${layerColors[t.layer]}`}>
                 {t.layer}
               </span>
               <span className="font-bold text-[15px] text-[#edeef3]">{t.name}</span>
@@ -1241,7 +1252,10 @@ function Footer() {
                   <a
                     key={item.label}
                     href={item.href}
-                    className="text-[14px] text-[#9198b7] hover:text-[#bec2d3] transition-colors"
+                    // inline-block so the padding actually applies — an inline
+                    // <a> ignores vertical padding for hit-testing. Takes the
+                    // target from ~22px to 34px.
+                    className="inline-block py-1.5 text-[14px] text-[#9198b7] hover:text-[#bec2d3] transition-colors"
                   >
                     {item.label}
                   </a>
