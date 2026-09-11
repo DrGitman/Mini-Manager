@@ -187,7 +187,7 @@ export default function TermsPage() {
       <Section title="16. Contact">
         <p>
           For questions about these Terms, contact us at{' '}
-          <a href="mailto:{SUPPORT_EMAIL}" className="text-primary hover:underline">
+          <a href={`mailto:${SUPPORT_EMAIL}`} className="text-primary hover:underline">
             {SUPPORT_EMAIL}
           </a>{' '}
           or write to: Mini Manager Inc., 123 Market Street, Suite 400, Wilmington, DE 19801.

@@ -26,7 +26,10 @@ itself in its own words:
 > *"I left your passport scan alone because it is personal identification and I didn't
 > want to risk moving something so private."*
 
-Nothing is ever deleted. There is no code path in the application that removes a file.
+Nothing is ever deleted. No operation the agent can emit destroys a file — "delete" moves
+it to the Recycle Bin or the Archive, and both can be restored. The only `unlink` left in
+the codebase is the second half of a cross-drive move, where the file already exists at its
+destination before the source is dropped.
 
 ---
 
@@ -205,9 +208,10 @@ depth. The agent never sees that split; it calls one tool.
 
 Both were researched before building, and the honest outcome is worth recording.
 
-**Bedrock** is Strands' default provider and remains the intended fallback. Gemini is
-primary today because a working single-provider loop beats a flaky two-provider one on a
-four-week timeline.
+**Bedrock** is Strands' default provider. It is not wired into this codebase — there is no
+Bedrock code path, and nothing falls back to it. Gemini is the only reasoning provider,
+because a working single-provider loop beats a flaky two-provider one on a four-week
+timeline. Bedrock is where this would go next, which is not the same as shipping it.
 
 **AgentCore Runtime** was evaluated and deliberately not used. A cloud runtime cannot reach
 `C:\Users\you\Downloads`, and this agent's entire purpose is acting on a user's local
@@ -373,7 +377,9 @@ escalated runs that silently never resume.
   lifecycle hooks, interrupts, and streaming. The control flow of the application.
 - **Amazon S3** — durable agent sessions, so an escalation raised by an unattended run
   survives a deploy and can still be answered.
-- **Amazon Bedrock** — the intended fallback provider (see above).
+
+Amazon Bedrock and AgentCore were evaluated and are **not** part of the shipped system —
+see [evaluated, not adopted](#amazon-bedrock-and-agentcore--evaluated-not-adopted) for why.
 
 **Model providers**
 

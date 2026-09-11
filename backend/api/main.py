@@ -19,7 +19,7 @@ from .middleware.security import SecurityHeadersMiddleware
 from .routers import (
     auth, classify, explain, scans, preferences, agent,
     stats, notifications, rules, profile, insights, search, journal, mfa, privacy,
-    corrections, blocklist, conventions, support_agent, onboarding, business_agents,
+    corrections, blocklist, conventions, support_agent, onboarding,
     agent_v2, runs,
 )
 from .services.db import close_pool, init_pool
@@ -158,7 +158,6 @@ app.include_router(blocklist.router,       prefix=_PREFIX)
 app.include_router(conventions.router,     prefix=_PREFIX)
 app.include_router(support_agent.router,   prefix=_PREFIX)
 app.include_router(onboarding.router,      prefix=_PREFIX)
-app.include_router(business_agents.router, prefix=_PREFIX)
 
 
 # ─── Health check ─────────────────────────────────────────────────────────────

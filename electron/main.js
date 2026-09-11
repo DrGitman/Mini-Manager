@@ -467,8 +467,8 @@ ipcMain.handle('trash-file', async (_, filePath) => {
 // see C:\Users\... at all.
 //
 // "delete" = Recycle Bin, which IS the quarantine: Windows already knows how to
-// restore from it. "permanently delete" removes it outright, so it is not in the
-// bin either.
+// restore from it. That is the only kind of delete there is — nothing here
+// removes a file outright.
 
 const PROTECTED_FRAGMENTS = [
   'c:\\windows', 'c:\\program files', 'c:\\programdata',
@@ -514,6 +514,10 @@ function moveOne(from, to) {
     fs.renameSync(from, dest)
   } catch (err) {
     if (err.code === 'EXDEV') {
+      // Moving across drives: rename cannot span filesystems, so copy to the
+      // destination and drop the source. The unlink here is the second half of
+      // a move, not a delete — the file exists at `dest` before it runs, which
+      // is why this is not a destructive operation despite the call.
       fs.copyFileSync(from, dest)
       fs.unlinkSync(from)
     } else throw err
@@ -563,14 +567,15 @@ ipcMain.handle('run-operations', async (_, operations) => {
         results.push({ op: t, status: 'done', detail: `${path.basename(op.path)} moved to the Recycle Bin`,
           file_name: path.basename(op.path), from: op.path, to: 'Recycle Bin' })
 
-      } else if (t === 'permanently_delete_file') {
-        // Gone for good — not in the bin either.
-        fs.unlinkSync(op.path)
-        results.push({ op: t, status: 'done', detail: `Permanently deleted ${path.basename(op.path)}. This cannot be undone.` })
-
-      } else if (t === 'permanently_delete_folder') {
-        fs.rmSync(op.path, { recursive: true, force: true })
-        results.push({ op: t, status: 'done', detail: `Permanently deleted ${path.basename(op.path)}. This cannot be undone.` })
+      // There is deliberately no permanent-delete branch here. The two that
+      // stood in this spot called fs.unlinkSync and fs.rmSync({recursive:true})
+      // and were the only code in the desktop app that could destroy a file.
+      //
+      // They are gone rather than guarded. "Nothing is ever deleted" is the
+      // product's central claim, and it is only true if the capability does not
+      // exist — a guarded one is a condition away from firing. An older server
+      // sending permanently_delete_* now falls through to the unknown-operation
+      // case below and is refused.
 
       } else if (t === 'move_file') {
         const dest = moveOne(op.source, op.destination)

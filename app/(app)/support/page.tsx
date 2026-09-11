@@ -19,7 +19,7 @@ export default function SupportPage() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: "Hi! I'm the Mini Manager support agent. How can I help you today? I can answer questions about features, billing, or troubleshoot issues.",
+      content: "Hi! I'm the Mini Manager help assistant. I can answer questions about features and settings, or help you troubleshoot. If I can't help, I'll pass you to a person.",
     },
   ])
   const [input, setInput] = useState('')
@@ -48,7 +48,9 @@ export default function SupportPage() {
     } catch {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again or email {SUPPORT_EMAIL}.',
+        // Backticks, not quotes. This was a single-quoted string, so the
+        // placeholder rendered to the user literally as "{SUPPORT_EMAIL}".
+        content: `Sorry, I ran into an error. Please try again, or email ${SUPPORT_EMAIL}.`,
         meta: { escalated: true },
       }])
     }
@@ -61,7 +63,17 @@ export default function SupportPage() {
       {/* Header */}
       <div className="mb-4">
         <h1 className="text-2xl font-semibold text-foreground">Support</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">AI-powered support — escalates to a human only when needed</p>
+        {/*
+          Deliberately not called "the agent", and deliberately not using the
+          word "escalates". This is a help-desk chatbot answering questions
+          about the product — it has no tools, no safety kernel and no
+          connection to the file-organising agent. Sharing that vocabulary
+          implied it was the same thing, which would have been untrue in the
+          one place where the difference matters most.
+        */}
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Answers questions about Mini Manager, and passes you to a person when it cannot
+        </p>
       </div>
 
       {/* Chat window */}

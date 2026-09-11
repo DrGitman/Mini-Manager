@@ -282,9 +282,6 @@ function describeOp(op: AgentOperation): string {
     case 'delete_file':
     case 'delete_folder_recursive':
       return `Move ${base(op.path)} to the Recycle Bin`
-    case 'permanently_delete_file':
-    case 'permanently_delete_folder':
-      return `Permanently delete ${base(op.path)} — cannot be undone`
     case 'archive':
     case 'archive_file':
     case 'archive_folder':
@@ -294,7 +291,10 @@ function describeOp(op: AgentOperation): string {
   }
 }
 
-const PERMANENT = new Set(['permanently_delete_file', 'permanently_delete_folder'])
+// The "this permanently deletes files" confirmation that lived here is gone
+// along with the operations it guarded. No operation the agent can emit
+// destroys anything, so a red panel warning about it would be describing a
+// capability the app no longer has.
 
 /**
  * Nothing touches the disk until this is answered.
@@ -312,20 +312,15 @@ function PendingChanges({
   onApply: () => void
   onCancel: () => void
 }) {
-  const permanent = ops.some(o => PERMANENT.has(o.type))
-
   if (decision === 'applied') return null
   if (decision === 'cancelled') {
     return <p className="mt-2 text-xs text-muted-foreground">Cancelled — nothing was changed.</p>
   }
 
   return (
-    <div className={cn(
-      'mt-3 rounded-lg border p-3',
-      permanent ? 'border-red-200 bg-red-50/60 dark:bg-red-950/20' : 'border-border bg-muted/40',
-    )}>
+    <div className="mt-3 rounded-lg border border-border bg-muted/40 p-3">
       <p className="text-xs font-medium text-foreground">
-        {permanent ? 'This permanently deletes files' : 'Review before I make these changes'}
+        Review before I make these changes
       </p>
       <ul className="mt-2 space-y-1">
         {ops.map((op, i) => (
@@ -338,12 +333,9 @@ function PendingChanges({
         <button
           onClick={onApply}
           disabled={busy}
-          className={cn(
-            'rounded-md px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-60',
-            permanent ? 'bg-red-600 hover:bg-red-700' : 'bg-primary hover:opacity-90',
-          )}
+          className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
         >
-          {busy ? 'Working…' : permanent ? 'Yes, delete permanently' : 'Apply changes'}
+          {busy ? 'Working…' : 'Apply changes'}
         </button>
         <button
           onClick={onCancel}

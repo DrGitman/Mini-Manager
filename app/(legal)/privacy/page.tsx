@@ -198,7 +198,7 @@ export default function PrivacyPage() {
         </ul>
         <p className="mt-3">
           To exercise these rights, contact us at{' '}
-          <a href="mailto:{SUPPORT_EMAIL}" className="text-primary hover:underline">
+          <a href={`mailto:${SUPPORT_EMAIL}`} className="text-primary hover:underline">
             {SUPPORT_EMAIL}
           </a>
           . We will respond within 30 days. We may ask you to verify your identity before processing your
@@ -221,7 +221,7 @@ export default function PrivacyPage() {
           encryption at rest for data stored in Firestore, access controls limiting employee access to
           production data, and regular security reviews. No method of transmission or storage is 100% secure.
           If you discover a vulnerability, please report it responsibly to{' '}
-          <a href="mailto:{SUPPORT_EMAIL}" className="text-primary hover:underline">
+          <a href={`mailto:${SUPPORT_EMAIL}`} className="text-primary hover:underline">
             {SUPPORT_EMAIL}
           </a>
           .
@@ -267,7 +267,7 @@ export default function PrivacyPage() {
           <p>123 Market Street, Suite 400</p>
           <p>Wilmington, DE 19801</p>
           <p>
-            <a href="mailto:{SUPPORT_EMAIL}" className="text-primary hover:underline">
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="text-primary hover:underline">
               {SUPPORT_EMAIL}
             </a>
           </p>

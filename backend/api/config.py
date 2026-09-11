@@ -60,6 +60,22 @@ class Settings(BaseSettings):
     aws_access_key_id: str = ""
     aws_secret_access_key: str = ""
 
+    # ── Outbound email ───────────────────────────────────────────────────────
+    # Used for run digests and escalation alerts, when the user has written a
+    # rule asking for them. Empty smtp_host disables sending entirely rather
+    # than erroring — email is an opt-in extra, never a dependency of a run.
+    #
+    # Mailtrap's sandbox captures mail instead of delivering it, which is what
+    # you want for a demo: no domain warming, no SPF/DKIM, and no possibility
+    # of mailing a real stranger. Point these at SES to go live.
+    smtp_host: str = ""
+    smtp_port: int = 2525
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "Mini Manager <agent@minimanager.app>"
+    # STARTTLS on 587/2525; implicit TLS on 465 needs smtp_ssl instead.
+    smtp_starttls: bool = True
+
     # CORS
     frontend_url: str = "https://mini-manager.vercel.app"
     # Comma-separated extra origins allowed to call the API (preview deploys,

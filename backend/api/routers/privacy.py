@@ -125,8 +125,14 @@ async def delete_my_account(
             # Tables without FK CASCADE to users
             await conn.execute("DELETE FROM login_attempts WHERE email = (SELECT email FROM users WHERE id = $1)", uid)
             await conn.execute("DELETE FROM audit_log WHERE user_id = $1", uid)
-            # This cascades to: user_preferences, scans, notifications, user_rules,
-            # batches → file_ops, mfa_secrets
+            # `notifications` has no foreign key to users at all, so it never
+            # cascaded — the comment below claimed it did. Deleting an account
+            # left its notification rows behind, including their text, while
+            # the response told the user everything had gone. Found by checking
+            # for orphans after a delete rather than by reading the comment.
+            await conn.execute("DELETE FROM notifications WHERE user_id = $1", uid)
+            # This cascades to: user_preferences, scans, user_rules,
+            # conventions, agent_runs, escalations, batches → file_ops, mfa_secrets
             await conn.execute("DELETE FROM users WHERE id = $1", uid)
 
     return {

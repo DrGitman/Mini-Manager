@@ -1,4 +1,14 @@
-"""Conventions — user-stated rules that outrank AI inferences."""
+"""
+Conventions — user-stated rules that outrank AI inferences.
+
+A rule here is no longer only about where files go. It can also set when the
+agent runs, how it reports back, how cautious it is, and what it must not
+touch. The compiler in `services.rules` decides which of those a sentence is;
+this router is storage and lifecycle around it.
+
+The compiled form carries its own `kind`, so no schema change was needed — the
+`compiled` column has always been JSONB.
+"""
 
 from __future__ import annotations
 
@@ -6,35 +16,15 @@ import json
 import logging
 from typing import Optional
 
-import httpx
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from ..config import settings
 from ..middleware.auth import get_current_user
+from ..services import rules as rules_svc
 from ..services.db import get_pool
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["conventions"])
-
-_GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions"
-_GROQ_MODEL = settings.groq_model
-
-_COMPILE_SYSTEM = """\
-You compile a user's natural-language file organisation rule into a structured JSON object.
-Return ONLY a JSON object — no markdown, no explanation.
-Schema: {
-  "pattern": {
-    "name_contains": ["word1", "word2"],   // optional keywords in filename
-    "extensions": [".pdf", ".docx"],       // optional file extensions
-    "folder_contains": "client work"       // optional parent folder keyword
-  },
-  "action": {
-    "target_folder": "Clients/ACME/2026",  // where to put matching files
-    "rename_pattern": null                  // optional rename template, null if not specified
-  },
-  "description": "one-sentence plain English summary of what this rule does"
-}"""
 
 
 class ConventionCreate(BaseModel):
@@ -50,44 +40,55 @@ class ConventionOut(BaseModel):
     compiled: Optional[dict] = None
     source: str
     active: bool
+    # Surfaced so the UI can show what a rule turned into, and say so when it
+    # turned into nothing. A rule the user believes is working but which no
+    # part of the system acts on is the failure this guards against.
+    kind: str = "filing"
+    description: str = ""
+    problem: str = ""
+
+
+def _out(row) -> ConventionOut:
+    """One row, with its compiled form parsed and summarised."""
+    compiled = row["compiled"]
+    if isinstance(compiled, str):
+        try:
+            compiled = json.loads(compiled)      # JSONB arrives as text
+        except Exception:                        # noqa: BLE001
+            compiled = None
+    body = compiled if isinstance(compiled, dict) else {}
+    return ConventionOut(
+        id=row["id"], scope=row["scope"], rule_text=row["rule_text"],
+        compiled=body or None, source=row["source"], active=row["active"],
+        kind=body.get("kind", "filing"),
+        description=body.get("description", "") or row["rule_text"],
+        problem=body.get("error", ""),
+    )
 
 
 @router.get("/conventions", response_model=list[ConventionOut])
 async def get_conventions(user: dict = Depends(get_current_user)) -> list[ConventionOut]:
     pool = get_pool()
     rows = await pool.fetch(
-        "SELECT id::text, scope, rule_text, compiled, source, active FROM conventions WHERE user_id = $1 ORDER BY created_at DESC",
+        "SELECT id::text, scope, rule_text, compiled, source, active "
+        "FROM conventions WHERE user_id = $1 ORDER BY created_at DESC",
         user["sub"],
     )
-    return [ConventionOut(
-        id=r["id"], scope=r["scope"], rule_text=r["rule_text"],
-        compiled=r["compiled"], source=r["source"], active=r["active"],
-    ) for r in rows]
+    return [_out(r) for r in rows]
 
 
 @router.post("/conventions", response_model=ConventionOut)
-async def add_convention(body: ConventionCreate, user: dict = Depends(get_current_user)) -> ConventionOut:
-    # Compile natural language → structured rule via Groq
-    compiled: Optional[dict] = None
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(
-                _GROQ_URL,
-                headers={"Authorization": f"Bearer {settings.groq_api_key}", "Content-Type": "application/json"},
-                json={
-                    "model": _GROQ_MODEL,
-                    "messages": [
-                        {"role": "system", "content": _COMPILE_SYSTEM},
-                        {"role": "user", "content": f'Rule: "{body.rule_text}"'},
-                    ],
-                    "temperature": 0.1,
-                    "response_format": {"type": "json_object"},
-                },
-            )
-            resp.raise_for_status()
-            compiled = json.loads(resp.json()["choices"][0]["message"]["content"])
-    except Exception as exc:
-        logger.warning("Convention compile failed (saving raw): %s", exc)
+async def add_convention(body: ConventionCreate,
+                         user: dict = Depends(get_current_user)) -> ConventionOut:
+    """
+    Store a rule, compiled into whichever kind it turns out to be.
+
+    A rule that could not be compiled is still stored — the user typed it and
+    deleting their words would be rude — but it carries its error, and the
+    deterministic consumers skip it. It shows in the UI as needing a rewrite
+    rather than sitting in the list looking like it works.
+    """
+    compiled = await rules_svc.compile_rule(body.rule_text)
 
     pool = get_pool()
     row = await pool.fetchrow(
@@ -97,14 +98,28 @@ async def add_convention(body: ConventionCreate, user: dict = Depends(get_curren
         RETURNING id::text, scope, rule_text, compiled, source, active
         """,
         user["sub"], body.scope, body.rule_text[:500],
-        json.dumps(compiled) if compiled else None,
-        body.source,
+        json.dumps(compiled), body.source,
     )
-    logger.info("Convention added for user %s: %s", user["sub"], body.rule_text[:60])
-    return ConventionOut(
-        id=row["id"], scope=row["scope"], rule_text=row["rule_text"],
-        compiled=row["compiled"], source=row["source"], active=row["active"],
+    logger.info("Rule added for user %s [%s]: %s",
+                user["sub"], compiled.get("kind"), body.rule_text[:60])
+    return _out(row)
+
+
+async def load_rules(user_id: str) -> list[dict]:
+    """
+    Every active rule for a user, for the deterministic consumers.
+
+    Used by the scheduler and the mailer, which run without the agent and so
+    need the compiled bodies rather than a prompt hint.
+    """
+    pool = get_pool()
+    rows = await pool.fetch(
+        "SELECT rule_text, compiled, source FROM conventions "
+        "WHERE user_id = $1 AND active = true ORDER BY created_at DESC LIMIT 50",
+        user_id,
     )
+    return [{"rule_text": r["rule_text"], "compiled": r["compiled"],
+             "source": r["source"]} for r in rows]
 
 
 @router.patch("/conventions/{conv_id}/toggle", response_model=ConventionOut)
@@ -118,10 +133,7 @@ async def toggle_convention(conv_id: str, user: dict = Depends(get_current_user)
         """,
         conv_id, user["sub"],
     )
-    return ConventionOut(
-        id=row["id"], scope=row["scope"], rule_text=row["rule_text"],
-        compiled=row["compiled"], source=row["source"], active=row["active"],
-    )
+    return _out(row)
 
 
 @router.delete("/conventions/{conv_id}", status_code=200)

@@ -10,7 +10,7 @@ export default function DownloadCenter() {
       title: "Windows Installer",
       icon: <Monitor className="w-8 h-8 text-[#00E5FF]" />,
       version: "v1.0.0-beta",
-      size: "184 MB",
+      size: "185 MB",
       badge: "Setup.exe Direct Download",
       description: "Get full desktop power for heavy-duty organizing, document scanning, schedule planning, and AI assistance on Windows.",
       buttonText: "Download Setup.exe",

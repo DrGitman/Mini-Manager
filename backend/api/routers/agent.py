@@ -46,21 +46,27 @@ class _PayloadTooLarge(Exception):
 # explicit instead of something we infer from whether `task` happens to be set.
 _OPERATION_TYPES = [
     "move_files", "move_folder", "move_file", "copy_files",
-    # "delete" = recoverable. Moves to the Archive.
+    # "delete" = recoverable. Moves to the Archive, and can be restored.
     "delete_folder_recursive", "delete_file",
-    # "permanently delete" = gone for good. Only ever emitted when the user
-    # explicitly says permanently/forever/for good — kept as separate operation
-    # types so an ordinary "delete these" can never reach them.
-    "permanently_delete_file", "permanently_delete_folder",
     "create_folder", "rename", "organize_by_type",
     # "archive" = keep it, but move it out of the way into the Archive folder,
-    # where the Archive page lists it and can restore it. Distinct from delete,
-    # which goes to the Recycle Bin.
+    # where the Archive page lists it and can restore it.
     "archive",
 ]
 
-# Operations that destroy data irreversibly.
-_IRREVERSIBLE = {"permanently_delete_file", "permanently_delete_folder"}
+# There is no irreversible operation. There used to be
+# permanently_delete_file and permanently_delete_folder, reached when a user
+# said "permanently" or "forever", and they did what they said — p.unlink() and
+# shutil.rmtree().
+#
+# They are gone, at every layer: not in this list, not in the prompt, not in the
+# executor below, not in the Electron executor. The product's central promise is
+# that nothing is ever destroyed, and a capability that exists but is guarded is
+# a capability that one prompt injection or one loosened condition away from
+# firing. The safest destructive code is the code that is not there.
+#
+# "delete this permanently" now archives, and the reply says so.
+_IRREVERSIBLE: set[str] = set()
 
 # Strict mode requires every property to be listed in `required`, so optional
 # operation fields are declared nullable rather than omitted.
@@ -149,13 +155,12 @@ OPERATION TYPES (use exact paths the user gave — never invent paths):
     Deleting and archiving go to different places. NEVER answer "archive this"
     with a delete operation.
 
-- {"type": "permanently_delete_file", "path": "C:\\path\\file.txt"}
-- {"type": "permanently_delete_folder", "path": "C:\\path\\folder"}
-  → GONE FOREVER. No undo, no Archive, no recovery.
-    ONLY use these when the user explicitly says "permanently", "forever",
-    "for good", "completely", "wipe", or "don't archive it".
-    "delete this" on its own NEVER means permanent — use delete_file.
-    If in doubt, use the recoverable version and say so in your reply.
+  There is NO permanent delete operation. Nothing you can emit destroys a file.
+  If the user asks to delete something permanently, forever, or for good, use
+  delete_file or delete_folder_recursive — which move it to the Archive — and
+  say plainly in your reply that you have moved it to the Archive instead of
+  destroying it, and that they can clear the Archive themselves if they want it
+  gone. Never claim to have permanently deleted anything.
 - {"type": "create_folder", "path": "C:\\path\\new_folder"}
   → creates a new folder (including parents)
 - {"type": "rename", "path": "C:\\path\\old_name", "new_name": "new_name"}
@@ -471,33 +476,11 @@ def _execute_operations(operations: list[dict]) -> list[dict]:
                     "archived_to": dest,
                 })
 
-            # ── permanently_delete_file → really gone ─────────────────────────
-            # Only reached when the user explicitly asked for permanent removal.
-            elif t == "permanently_delete_file":
-                p = pathlib.Path(op["path"])
-                if not p.exists():
-                    results.append({"op": t, "status": "done", "detail": f"{p.name} already gone"})
-                    continue
-                p.unlink()
-                logger.warning("PERMANENTLY deleted file: %s", p)
-                results.append({
-                    "op": t, "status": "done",
-                    "detail": f"Permanently deleted {p.name}. This cannot be undone.",
-                })
-
-            # ── permanently_delete_folder → really gone ───────────────────────
-            elif t == "permanently_delete_folder":
-                p = pathlib.Path(op["path"])
-                if not p.exists():
-                    results.append({"op": t, "status": "done", "detail": f"{p.name} already gone"})
-                    continue
-                count = sum(1 for _ in p.rglob("*"))
-                shutil.rmtree(str(p))
-                logger.warning("PERMANENTLY deleted folder: %s (%d items)", p, count)
-                results.append({
-                    "op": t, "status": "done",
-                    "detail": f"Permanently deleted {p.name} ({count} items). This cannot be undone.",
-                })
+            # The two permanent-delete branches that stood here have been
+            # removed along with the operation types themselves. If an older
+            # client still sends one, it falls through to the unknown-operation
+            # handler and is refused — it does not silently succeed, and it
+            # certainly does not delete anything.
 
             # ── create_folder ─────────────────────────────────────────────────
             elif t == "create_folder":

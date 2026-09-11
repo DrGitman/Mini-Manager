@@ -26,15 +26,19 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from ..middleware.auth import get_current_user
+from ..services import email as mail
+from ..services import rules as rules_svc
 from ..services.autonomous import RunResult, run_autonomously
 from ..services.db import get_pool
+from .conventions import load_rules
 from .notifications import create_notification
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["runs"])
 
-# How often a scheduled run happens. Six hours is frequent enough to feel
-# attentive and rare enough that a user is not forever reviewing escalations.
+# How often a scheduled run happens when the user has written no schedule rule.
+# Six hours is frequent enough to feel attentive and rare enough that a user is
+# not forever reviewing escalations. `services.rules` owns the override.
 RUN_INTERVAL = timedelta(hours=6)
 
 
@@ -166,14 +170,19 @@ async def is_run_due(user: dict = Depends(get_current_user)) -> DueResponse:
     if row is None:
         return DueResponse(due=True, reason="no scheduled run has happened yet")
 
+    # The user's own schedule rules decide the cadence. With none written this
+    # returns the same six-hourly answer it always did, so nothing changes for
+    # anyone who has not asked for anything different.
     last = row["started_at"]
-    next_due = last + RUN_INTERVAL
+    user_rules = await load_rules(user["sub"])
+    next_due, why = rules_svc.next_due_at(user_rules, last_run=last, now=now)
+
     return DueResponse(
         due=now >= next_due,
         last_run_at=last.isoformat(),
         next_run_at=next_due.isoformat(),
-        reason=("due" if now >= next_due
-                else f"next run at {next_due.isoformat()}"),
+        reason=("due — " + why if now >= next_due
+                else f"next run at {next_due.isoformat()} ({why})"),
     )
 
 
@@ -188,10 +197,17 @@ async def start_run(
     Returns the operations the kernel approved. Nothing has touched the disk
     yet — the desktop app executes them, behind its own guard.
     """
+    # Rules are loaded once and used twice: an autonomy rule changes how bold
+    # this run is allowed to be, and a notify rule decides who hears about it
+    # afterwards. Both are the user's stated intent, so both outrank the
+    # sliders in Settings.
+    user_rules = await load_rules(user["sub"])
+    prefs = rules_svc.autonomy_overrides(user_rules, body.preferences)
+
     result = await run_autonomously(
         user_id=user["sub"],
         digests=body.digests,
-        prefs=body.preferences,
+        prefs=prefs,
         trigger=body.trigger,
         recorder=RunRecorder(),
     )
@@ -208,6 +224,8 @@ async def start_run(
             body=result.summary,
         )
 
+    await _email_if_asked(user, user_rules, result)
+
     return RunResponse(
         run_id=result.run_id,
         summary=result.summary,
@@ -218,6 +236,53 @@ async def start_run(
         tool_calls=result.tool_calls,
         status=result.status,
     )
+
+
+async def _email_if_asked(user: dict, user_rules: list[dict], result: RunResult) -> None:
+    """
+    Send the run digest, if and only if a rule asked for one.
+
+    Silence is the default. An agent that emails you without being asked is
+    precisely the behaviour this product exists to avoid, so there is no
+    "helpful" fallback here — no rule means no mail.
+
+    Never raises. A run that organised forty files and then could not reach the
+    mail server is a successful run with an undelivered email, and reporting it
+    as a failure would be a lie about what happened to the user's files.
+    """
+    try:
+        plan = rules_svc.notify_plan(
+            user_rules,
+            account_email=user.get("email", ""),
+            files_applied=result.files_applied,
+            escalations=result.escalation_count,
+        )
+        if not plan["send"]:
+            logger.debug("run %s: no email (%s)", result.run_id, plan["reason"])
+            return
+
+        if not plan["address"]:
+            logger.warning("run %s: an email rule matched but there is no address "
+                           "to send to", result.run_id)
+            return
+
+        subject, html = mail.render_run_digest(
+            summary=result.summary,
+            files_seen=result.files_seen,
+            files_applied=result.files_applied,
+            escalations=result.escalations,
+            folders=result.folders,
+        )
+        sent = await mail.send_email(plan["address"], subject, html)
+        if sent.ok:
+            logger.info("run %s: digest emailed to %s", result.run_id, plan["address"])
+        elif sent.disabled:
+            logger.info("run %s: a rule asked for email but no SMTP host is "
+                        "configured", result.run_id)
+        else:
+            logger.warning("run %s: digest email failed: %s", result.run_id, sent.error)
+    except Exception as exc:                     # noqa: BLE001 - never fail a run
+        logger.exception("run %s: notification step failed: %s", result.run_id, exc)
 
 
 @router.get("/runs/latest")
