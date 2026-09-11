@@ -184,13 +184,31 @@ export async function migrateLegacyMonitorFolders(): Promise<string[]> {
   if (!api?.getUserPaths) return []
 
   const prefs = await apiGetPreferences()
-  if ((prefs.custom_folders ?? []).length > 0) return []      // already using the new model
-  if (!prefs.monitor_downloads && !prefs.monitor_desktop && !prefs.monitor_documents) return []
+
+  // Nothing legacy left to do. Once the flags are off they stay off, which is
+  // what makes this run once rather than once per empty scope.
+  if (!prefs.monitor_downloads && !prefs.monitor_desktop && !prefs.monitor_documents) {
+    return []
+  }
+
+  // Someone who has already built a scope keeps it untouched — but the flags
+  // still get retired, or emptying the scope later would trigger this again.
+  //
+  // That was the bug: the only guard was "custom_folders is non-empty", so
+  // removing every folder made the app eligible for migration a second time and
+  // Downloads reappeared. Users read that as the app overruling them, which is
+  // exactly what it was doing.
+  if ((prefs.custom_folders ?? []).length > 0) {
+    await retireLegacyFlags(prefs)
+    return []
+  }
 
   let paths: UserPaths
   try {
     paths = await api.getUserPaths()
   } catch {
+    // No paths means no safe migration. The flags are left alone so it can be
+    // retried next launch rather than silently dropping someone's setup.
     return []
   }
 
@@ -200,10 +218,26 @@ export async function migrateLegacyMonitorFolders(): Promise<string[]> {
     prefs.monitor_documents ? paths.documents : null,
   ].filter((p): p is string => Boolean(p))
 
-  if (!wanted.length) return []
-
-  await apiSavePreferences({ ...prefs, custom_folders: wanted })
+  // Written in one call with the flags cleared, so the scope and the retirement
+  // cannot disagree if this is interrupted.
+  await apiSavePreferences({
+    ...prefs,
+    custom_folders: wanted,
+    monitor_downloads: false,
+    monitor_desktop: false,
+    monitor_documents: false,
+  })
   return wanted
+}
+
+/** Turn the old toggles off without touching the scope. */
+async function retireLegacyFlags(prefs: Awaited<ReturnType<typeof apiGetPreferences>>): Promise<void> {
+  await apiSavePreferences({
+    ...prefs,
+    monitor_downloads: false,
+    monitor_desktop: false,
+    monitor_documents: false,
+  })
 }
 
 /** Back-compat name used by the assistant panel. */

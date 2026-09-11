@@ -153,6 +153,30 @@ async def start_demo(request: Request) -> DemoSession:
     pool = get_pool()
     ip = client_ip(request)
 
+    # Retire guest accounts older than a day.
+    #
+    # Every demo visit creates a real users row, which is what lets a guest be
+    # an ordinary user everywhere downstream — but it also means the table grows
+    # by one per visitor and never shrinks. Cleaning up here rather than on a
+    # schedule keeps it to one statement with no extra infrastructure, and the
+    # rows are disposable by construction: the token expires in two hours, so
+    # anything a day old is certainly finished with.
+    #
+    # Failure is ignored on purpose. Housekeeping must never stop someone
+    # starting the demo.
+    try:
+        removed = await pool.execute(
+            """
+            DELETE FROM users
+            WHERE email LIKE '%@demo.invalid'
+              AND created_at < NOW() - INTERVAL '24 hours'
+            """
+        )
+        if removed and removed != "DELETE 0":
+            logger.info("demo: cleaned up expired guests (%s)", removed)
+    except Exception as exc:                     # noqa: BLE001 - never block a visitor
+        logger.warning("demo: guest cleanup skipped: %s", exc)
+
     # Actions already spent from this address today, across every session it has
     # opened. This is what stops a fresh allowance being one reload away.
     spent_today = await pool.fetchval(

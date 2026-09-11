@@ -72,7 +72,11 @@ class Preferences(BaseModel):
     naming_convention: str = "date-subject"
     auto_threshold: float = 0.85
     review_threshold: float = 0.70
-    monitor_downloads: bool = True
+    # False: scan scope holds exactly what the user added, nothing else.
+    # Defaulting this to True gave every new account a Downloads folder it
+    # never chose, and the client's legacy migration then restored it every
+    # time the user removed it.
+    monitor_downloads: bool = False
     monitor_desktop: bool = False
     monitor_documents: bool = False
     custom_folders: List[str] = []
