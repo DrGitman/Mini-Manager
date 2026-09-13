@@ -253,50 +253,119 @@ mini-manager-app/
 
 ---
 
-## Run
+## What is in this repository
 
-Node 20+, pnpm, Python 3.13, and a PostgreSQL database.
+Everything you need to run Mini Manager is here:
 
-**Use pnpm, not npm.** The dependency tree is symlinked and npm's resolver fails on it.
-
-```bash
-pnpm install
-python -m venv backend/api/.venv
-backend/api/.venv/Scripts/python.exe -m pip install -r backend/api/requirements.txt
-
-# configure backend/api/.env and .env.local (see below)
-
-pnpm dev:all          # frontend on :3000, API on :8000
-pnpm electron:dev     # desktop app
-pnpm electron:build   # Windows installer → dist-electron/
-```
-
-Migrations run automatically on backend startup. Building the installer needs Windows
-Developer Mode enabled, or an administrator terminal.
+* **Source code** for the website (`app/`, `components/`, `lib/`), the backend API
+  (`backend/api/`) and the desktop app (`electron/`)
+* **Assets**: logos and icons in `public/`, and the desktop app icons in `electron/assets/`
+* **Setup instructions**: the steps below
+* **Example settings files**: `backend/api/.env.example` and `.env.local.example`
 
 ---
 
-## Configuration
+## Getting started
 
-`backend/api/.env`:
+These steps are written for Windows, which is what the desktop app is built for.
 
-| Name | Purpose | Required |
+### What you need
+
+* Node.js 20 or newer
+* pnpm (install it with `npm install -g pnpm`)
+* Python 3.13
+* A PostgreSQL database. A free [Neon](https://neon.tech) database works.
+* An API key from [Google Gemini](https://aistudio.google.com) and one from [Groq](https://console.groq.com)
+
+### Steps
+
+**1. Download the code**
+
+```bash
+git clone https://github.com/DrGitman/Mini-Manager.git
+cd Mini-Manager
+```
+
+**2. Install the website and desktop app packages**
+
+Use pnpm, not npm. This project does not install correctly with npm.
+
+```bash
+pnpm install
+```
+
+**3. Install the backend**
+
+```bash
+python -m venv backend/api/.venv
+backend/api/.venv/Scripts/python.exe -m pip install -r backend/api/requirements.txt
+```
+
+**4. Add your settings**
+
+Copy the two example files, then open each copy and fill in your own values.
+
+```bash
+copy backend\api\.env.example backend\api\.env
+copy .env.local.example .env.local
+```
+
+**5. Start the app**
+
+```bash
+pnpm dev:all
+```
+
+This starts the website at http://localhost:3000 and the API at http://localhost:8000.
+The database tables are created for you the first time the backend starts.
+
+**6. Open the desktop app (optional)**
+
+Keep the backend running with `pnpm backend` in one terminal, then run this in another:
+
+```bash
+pnpm electron:dev
+```
+
+**7. Build the Windows installer (optional)**
+
+```bash
+pnpm electron:build
+```
+
+The installer is saved in `dist-electron/`. This needs Windows Developer Mode turned on,
+or a terminal opened as administrator.
+
+---
+
+## Settings
+
+### Backend: `backend/api/.env`
+
+| Name | What it is for | Needed |
 |---|---|---|
-| `DATABASE_URL` | PostgreSQL connection string | Yes |
-| `JWT_SECRET` | Signs login tokens | Yes |
+| `DATABASE_URL` | Your PostgreSQL connection string | Yes |
+| `JWT_SECRET` | A long random string that signs login tokens | Yes |
 | `GEMINI_API_KEY` | The agent's reasoning | Yes |
-| `GROQ_API_KEY` | Bulk file classification | Yes |
-| `GEMINI_MODEL` | Defaults to `gemini-flash-lite-latest` | No |
-| `GROQ_MODEL` | Defaults to `openai/gpt-oss-120b` | No |
-| `SESSION_BACKEND` | `file` or `s3`, and **must be `s3` in production** | No |
-| `SESSION_S3_BUCKET` / `SESSION_S3_REGION` | Where paused agents wait | If s3 |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Access to that bucket | If s3 |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google sign-in | Optional |
+| `GROQ_API_KEY` | Sorting large numbers of files | Yes |
+| `FRONTEND_URL` | The website address, so the API accepts its requests | Yes |
+| `GEMINI_MODEL`, `GROQ_MODEL` | Change which models are used | No |
+| `SESSION_BACKEND` | `file` on your own computer, `s3` when hosted | No |
+| `SESSION_S3_BUCKET`, `SESSION_S3_REGION` | The S3 bucket where a paused agent waits | Only with `s3` |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Access to that bucket | Only with `s3` |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | Email for run summaries and alerts | No |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Sign in with Google | No |
 
-Render's filesystem is ephemeral, so file-based sessions there lose any interrupt waiting
-on a user at the next deploy. A misconfigured S3 backend fails at startup rather than
-quietly falling back. That failure is invisible otherwise, and the only symptom would be
-escalated runs that silently never resume.
+When the backend is hosted on Render, set `SESSION_BACKEND` to `s3`. Render clears its disk
+on every deploy, so an agent waiting for your answer in a file would be lost.
+
+### Website: `.env.local`
+
+| Name | What it is for | Needed |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | The backend address, for example `http://localhost:8000` | Yes |
+| `NEXT_PUBLIC_SITE_URL` | The public website address | No |
+| `NEXT_PUBLIC_SUPPORT_EMAIL` | The email shown on support links | No |
 
 ---
 
@@ -343,4 +412,6 @@ itself.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Mini Manager is open source under the **MIT License**. You are free to use, change and
+share the code. The full text is in the [LICENSE](LICENSE) file, and GitHub shows it as
+"MIT license" in the About section of this repository.
